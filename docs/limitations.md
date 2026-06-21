@@ -18,8 +18,7 @@ Below are the deliberate simplifications and their reasons.
   `-ldflags -X ...Version`, so Authelia reports its version as `untagged-unknown` (visible
   in the `migrations` table). Cosmetic; easy to add tag injection.
 - **CGO + platforms.** go-libsql requires `CGO_ENABLED=1` and supports linux/macos
-  amd64/arm64. No pure-Go option for a remote sqld existed at the time of writing (turso-go
-  is local-only — see [driver-and-gotchas.md](driver-and-gotchas.md)).
+  amd64/arm64. No pure-Go option for a remote sqld existed at the time of writing.
 - **Downstream patches.** The "sessions in storage/libsql" approach and reusing the sqlite
   backend via go-libsql are downstream changes, not intended for upstream as-is.
 - **Binary size.** ~47–58 MB due to the embedded native libsql (+ the web frontend for

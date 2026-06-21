@@ -27,9 +27,9 @@ Portal: `https://auth.example.com:10010` (self-signed TLS cert, see docs).
 
 - [docs/architecture.md](docs/architecture.md) — components, ports, data flow, the
   Caddy+namespaces trick, pinned versions, repository layout.
-- [docs/driver-and-gotchas.md](docs/driver-and-gotchas.md) — why go-libsql (not
-  turso-go), the gotchas (multi-statement, `STREAM_EXPIRED`, otelsql, symbol clash, Root
-  DSE), binary size optimization.
+- [docs/driver-and-gotchas.md](docs/driver-and-gotchas.md) — why go-libsql, the gotchas
+  (multi-statement, `STREAM_EXPIRED`, otelsql, symbol clash, Root DSE), binary size
+  optimization.
 - [docs/patches.md](docs/patches.md) — exactly what is patched in Authelia and glauth, the
   frontend build, idempotency.
 - [docs/usage.md](docs/usage.md) — mise task reference, lifecycle, verification

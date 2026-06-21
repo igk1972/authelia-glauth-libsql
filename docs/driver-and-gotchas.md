@@ -1,18 +1,8 @@
 # libsql driver and gotchas
 
-## Why go-libsql, not turso-go
+## Why go-libsql
 
-The initial target was `turso-go` (`turso.tech/database/tursogo`, pure Go, beta). Testing
-showed its `database/sql` driver is **local-only**:
-
-```
-$ sql.Open("turso", "http://localhost:10000/authelia") ; db.Ping()
-turso: error: I/O error (open): entity not found
-```
-
-i.e. the DSN is treated as a path to a local file; turso-go cannot talk to a remote classic
-sqld over Hrana (its remote support is only via its own sync protocol, incompatible with
-sqld). So **go-libsql (CGO)** was chosen, which:
+The driver is [`go-libsql`](https://github.com/tursodatabase/go-libsql) (CGO), which:
 
 - connects to sqld over Hrana and **preserves the URL path prefix** → path-based
   namespaces via Caddy work (`http://localhost:10000/<ns>`);

@@ -19,9 +19,8 @@ PORT_AUTHELIA = "10010"    # Authelia web portal
 PORT_GLAUTH_LDAP = "10020" # glauth LDAP listener
 
 # --- libsql Go driver ---
-# go-libsql (CGO, driver name "libsql"). Chosen by the spike: turso-go has NO
-# remote-to-sqld mode (its driver is local-only), while go-libsql talks to sqld
-# over Hrana and preserves the Caddy /<namespace> path prefix. Requires CGO_ENABLED=1.
+# go-libsql (CGO, driver name "libsql"): talks to sqld over Hrana and preserves the
+# Caddy /<namespace> path prefix. Requires CGO_ENABLED=1.
 DRIVER = "libsql"
 
 # --- sqld namespaces (must match [a-z0-9_-]+ for the Caddy path router) ---
