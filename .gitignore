@@ -1,0 +1,25 @@
+# Cloned upstream sources + compiled binaries
+/.build/
+
+# Caddy runtime
+/deploy/caddy/data/
+
+# Generated self-signed TLS cert for the Authelia portal
+/deploy/authelia/tls/
+
+# Runtime: pids, logs, sqld data
+/.run/
+*.log
+*.pid
+
+# Test artifacts
+/test-results/
+/tests/node_modules/
+/tests/test-results/
+/tests/playwright-report/
+
+# Local Authelia secrets (copied from config/authelia/secrets.env.example)
+/config/authelia/secrets.env
+
+# Local tooling
+/.claude/
