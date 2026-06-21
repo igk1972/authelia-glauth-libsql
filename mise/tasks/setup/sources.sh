@@ -60,7 +60,11 @@ regen_authelia_keys() {
 }
 
 clone authelia https://github.com/authelia/authelia.git "$AUTHELIA_TAG"
-clone glauth https://github.com/glauth/glauth.git "$GLAUTH_TAG" --recurse-submodules
+# glauth's plugin submodules (glauth-{sqlite,mysql,postgres,pam}) use SSH URLs in
+# .gitmodules and are NOT needed for the embedlibsql build (go.work uses only ./v2, and
+# the main module neither requires nor imports them). Skip them — otherwise CI runners
+# without an SSH key fail cloning git@github.com:glauth/*.
+clone glauth https://github.com/glauth/glauth.git "$GLAUTH_TAG"
 
 apply_patches authelia
 regen_authelia_keys
