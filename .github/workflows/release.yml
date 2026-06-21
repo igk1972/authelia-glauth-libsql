@@ -1,0 +1,176 @@
+name: release
+
+# Builds the patched Authelia + glauth (libsql) natively per target, then:
+#  - publishes two multi-arch container images to ghcr.io via buildah (no Containerfile);
+#  - uploads the binaries to a GitHub Release.
+# Native build per arch (CGO_ENABLED=1, go-libsql links a prebuilt static libsql.a),
+# so each target runs on its own runner — no cross toolchain / QEMU.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push images to ghcr.io
+
+jobs:
+  # Resolve the image versions from the upstream pins in mise.toml.
+  meta:
+    runs-on: ubuntu-slim
+    outputs:
+      authelia_version: ${{ steps.v.outputs.authelia_version }}
+      glauth_version: ${{ steps.v.outputs.glauth_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          set -euo pipefail
+          a=$(grep -E '^AUTHELIA_TAG' mise.toml | sed -E 's/.*"v?([^"]+)".*/\1/')
+          g=$(grep -E '^GLAUTH_TAG'   mise.toml | sed -E 's/.*"v?([^"]+)".*/\1/')
+          echo "authelia_version=$a" >> "$GITHUB_OUTPUT"
+          echo "glauth_version=$g"   >> "$GITHUB_OUTPUT"
+          echo "authelia=$a, glauth=$g"
+
+  # Build binaries on a native runner per target; on linux also build & push per-arch images.
+  build:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux,  arch: amd64, runner: ubuntu-24.04 }
+          - { os: linux,  arch: arm64, runner: ubuntu-24.04-arm }
+          - { os: darwin, arch: arm64, runner: macos-14 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      # The Go module cache holds the (large) prebuilt libsql .a; key on the upstream pins.
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ matrix.os }}-${{ matrix.arch }}-${{ hashFiles('mise.toml') }}
+          restore-keys: |
+            gomod-${{ matrix.os }}-${{ matrix.arch }}-
+
+      - name: Build sources, frontend and binaries
+        run: |
+          set -euo pipefail
+          mise run setup:sources
+          mise run build:frontend
+          mise run build:authelia
+          mise run build:glauth
+
+      - name: Stage binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          A="${{ needs.meta.outputs.authelia_version }}"
+          G="${{ needs.meta.outputs.glauth_version }}"
+          cp .build/bin/authelia "dist/authelia-${A}-libsql-${{ matrix.os }}-${{ matrix.arch }}"
+          cp .build/bin/glauth   "dist/glauth-${G}-libsql-${{ matrix.os }}-${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+      # Container images: linux only (distroless base-debian13, glibc >= runner's 2.39).
+      - name: Build and push per-arch images (buildah, no Containerfile)
+        if: matrix.os == 'linux'
+        env:
+          OWNER: ${{ github.repository_owner }}
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          A: ${{ needs.meta.outputs.authelia_version }}
+          G: ${{ needs.meta.outputs.glauth_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          command -v buildah >/dev/null || { sudo apt-get update && sudo apt-get install -y buildah; }
+
+          owner_lc=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          buildah login -u "$ACTOR" -p "$GH_TOKEN" ghcr.io
+
+          # build_image <component> <version> <bin-path> <cmd-json>
+          build_image() {
+            local comp="$1" ver="$2" bin="$3" cmd="$4" ctr img
+            ctr=$(buildah from gcr.io/distroless/base-debian13:latest)
+            buildah copy "$ctr" "$bin" "/usr/bin/$comp"
+            buildah config \
+              --entrypoint "[\"/usr/bin/$comp\"]" \
+              --cmd "$cmd" \
+              --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+              --label "org.opencontainers.image.version=${ver}-libsql" \
+              --label "org.opencontainers.image.title=${comp}" \
+              "$ctr"
+            img="ghcr.io/${owner_lc}/${comp}:${ver}-libsql-${ARCH}"
+            buildah commit "$ctr" "$img"
+            buildah push "$img"
+          }
+
+          # Config is mounted at runtime; these are convenient defaults, override at `run`.
+          build_image authelia "$A" .build/bin/authelia '["--config","/config/configuration.yml"]'
+          build_image glauth   "$G" .build/bin/glauth   '["-c","/config/glauth.cfg"]'
+
+  # Stitch the per-arch images into one multi-arch manifest list per component.
+  manifest:
+    needs: [meta, build]
+    runs-on: ubuntu-slim
+    steps:
+      - name: Create and push multi-arch manifests
+        env:
+          OWNER: ${{ github.repository_owner }}
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          A: ${{ needs.meta.outputs.authelia_version }}
+          G: ${{ needs.meta.outputs.glauth_version }}
+        run: |
+          set -euo pipefail
+          command -v buildah >/dev/null || { sudo apt-get update && sudo apt-get install -y buildah; }
+
+          owner_lc=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          buildah login -u "$ACTOR" -p "$GH_TOKEN" ghcr.io
+
+          # make_manifest <component> <version>
+          make_manifest() {
+            local comp="$1" ver="$2" tag
+            tag="ghcr.io/${owner_lc}/${comp}:${ver}-libsql"
+            buildah manifest create "$tag"
+            buildah manifest add "$tag" "docker://${tag}-amd64"
+            buildah manifest add "$tag" "docker://${tag}-arm64"
+            buildah manifest push --all "$tag" "docker://${tag}"
+          }
+
+          make_manifest authelia "$A"
+          make_manifest glauth   "$G"
+
+  # Publish all binaries (linux amd64/arm64 + darwin arm64) to the GitHub Release.
+  release:
+    needs: [meta, build]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: bin-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: true
