@@ -1,0 +1,21 @@
+{
+	auto_https off
+	admin off
+}
+
+# Path-based ingress for sqld running with --enable-namespaces.
+# A request to /<namespace>/<rest> is proxied to sqld with Host: <namespace>.sqld,
+# so libsql clients can select a namespace by URL path (no /etc/hosts needed).
+# Ports come from the mise [env] (PORT_CADDY / SQLD_HTTP), with literal defaults.
+:{$PORT_CADDY:10000} {
+	@ns path_regexp ns ^/([a-z0-9_-]+)(/.*)?$
+	handle @ns {
+		rewrite * {re.ns.2}
+		reverse_proxy 127.0.0.1:{$SQLD_HTTP:10001} {
+			header_up Host {re.ns.1}.sqld
+		}
+	}
+	handle {
+		respond "Use /<namespace>/... - sqld with --enable-namespaces" 404
+	}
+}

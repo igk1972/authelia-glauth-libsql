@@ -1,0 +1,980 @@
+diff --git a/go.mod b/go.mod
+index 785e515..d5ca5f3 100644
+--- a/go.mod
++++ b/go.mod
+@@ -86,6 +86,7 @@ require (
+ 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+ 	github.com/klauspost/compress v1.18.6 // indirect
+ 	github.com/knadh/koanf/maps v0.1.2 // indirect
++	github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06 // indirect
+ 	github.com/mitchellh/copystructure v1.2.0 // indirect
+ 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+@@ -101,6 +102,7 @@ require (
+ 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+ 	github.com/test-go/testify v1.1.4 // indirect
+ 	github.com/tinylib/msgp v1.6.4 // indirect
++	github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04 // indirect
+ 	github.com/valyala/bytebufferpool v1.0.0 // indirect
+ 	github.com/x448/float16 v0.8.4 // indirect
+ 	github.com/ysmood/fetchup v0.3.0 // indirect
+diff --git a/go.sum b/go.sum
+index 2d96f13..234eb01 100644
+--- a/go.sum
++++ b/go.sum
+@@ -150,6 +150,8 @@ github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
+ github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
+ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
+ github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
++github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06 h1:JLvn7D+wXjH9g4Jsjo+VqmzTUpl/LX7vfr6VOfSWTdM=
++github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06/go.mod h1:FUkZ5OHjlGPjnM2UyGJz9TypXQFgYqw6AFNO1UiROTM=
+ github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
+ github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
+ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
+@@ -216,6 +218,8 @@ github.com/tinylib/msgp v1.6.4 h1:mOwYbyYDLPj35mkA2BjjYejgJk9BuHxDdvRnb6v2ZcQ=
+ github.com/tinylib/msgp v1.6.4/go.mod h1:RSp0LW9oSxFut3KzESt5Voq4GVWyS+PSulT77roAqEA=
+ github.com/trustelem/zxcvbn v1.0.1 h1:mp4JFtzdDYGj9WYSD3KQSkwwUumWNFzXaAjckaTYpsc=
+ github.com/trustelem/zxcvbn v1.0.1/go.mod h1:zonUyKeh7sw6psPf/e3DtRqkRyZvAbOfjNz/aO7YQ5s=
++github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04 h1:9nlqEMruvXDPynGbZ0RE67kKnkkg3NdnjGccvRABefc=
++github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04/go.mod h1:TjsB2miB8RW2Sse8sdxzVTdeGlx74GloD5zJYUC38d8=
+ github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
+ github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
+ github.com/valyala/fasthttp v1.71.0 h1:tepR7H+Guh9VUqxxcPggYi8R3lGUu2Rsdh+z7/FCY3k=
+diff --git a/internal/configuration/schema/session.go b/internal/configuration/schema/session.go
+index e0064fa..9dbee34 100644
+--- a/internal/configuration/schema/session.go
++++ b/internal/configuration/schema/session.go
+@@ -16,10 +16,19 @@ type Session struct {
+ 
+ 	Redis *SessionRedis `koanf:"redis" yaml:"redis,omitempty" toml:"redis,omitempty" json:"redis,omitempty" jsonschema:"title=Redis" jsonschema_description:"Redis Session Provider configuration."`
+ 
++	LibSQL *SessionLibSQL `koanf:"libsql" yaml:"libsql,omitempty" toml:"libsql,omitempty" json:"libsql,omitempty" jsonschema:"title=libSQL" jsonschema_description:"libSQL/sqld Session Provider configuration."`
++
+ 	// Deprecated: Use the session cookies option with the same name instead.
+ 	Domain string `koanf:"domain" yaml:"domain,omitempty" toml:"domain,omitempty" json:"domain,omitempty" jsonschema:"deprecated,title=Domain"`
+ }
+ 
++// SessionLibSQL represents the configuration for storing sessions in a remote libSQL/sqld server.
++type SessionLibSQL struct {
++	URL       string `koanf:"url" yaml:"url,omitempty" toml:"url,omitempty" json:"url,omitempty" jsonschema:"title=URL" jsonschema_description:"The libSQL server URL (e.g. http://host:port/namespace)."`
++	AuthToken string `koanf:"auth_token" yaml:"auth_token,omitempty" toml:"auth_token,omitempty" json:"auth_token,omitempty" jsonschema:"title=Auth Token" jsonschema_description:"The JWT auth token presented to the libSQL server."`
++	Table     string `koanf:"table" yaml:"table,omitempty" toml:"table,omitempty" json:"table,omitempty" jsonschema:"default=session,title=Table" jsonschema_description:"The table used to store sessions."`
++}
++
+ type SessionCookieCommon struct {
+ 	Name       string        `koanf:"name" yaml:"name,omitempty" toml:"name,omitempty" json:"name,omitempty" jsonschema:"default=authelia_session,title=Name" jsonschema_description:"The session cookie name."`
+ 	SameSite   string        `koanf:"same_site" yaml:"same_site,omitempty" toml:"same_site,omitempty" json:"same_site,omitempty" jsonschema:"default=lax,enum=lax,enum=strict,enum=none,title=Same Site" jsonschema_description:"The session cookie same site value."`
+diff --git a/internal/configuration/schema/storage.go b/internal/configuration/schema/storage.go
+index bb3031c..b7a4412 100644
+--- a/internal/configuration/schema/storage.go
++++ b/internal/configuration/schema/storage.go
+@@ -11,10 +11,17 @@ type Storage struct {
+ 	Local      *StorageLocal      `koanf:"local" yaml:"local,omitempty" toml:"local,omitempty" json:"local,omitempty" jsonschema:"title=Local" jsonschema_description:"The Local SQLite3 Storage configuration settings."`
+ 	MySQL      *StorageMySQL      `koanf:"mysql" yaml:"mysql,omitempty" toml:"mysql,omitempty" json:"mysql,omitempty" jsonschema:"title=MySQL" jsonschema_description:"The MySQL/MariaDB Storage configuration settings."`
+ 	PostgreSQL *StoragePostgreSQL `koanf:"postgres" yaml:"postgres,omitempty" toml:"postgres,omitempty" json:"postgres,omitempty" jsonschema:"title=PostgreSQL" jsonschema_description:"The PostgreSQL Storage configuration settings."`
++	LibSQL     *StorageLibSQL     `koanf:"libsql" yaml:"libsql,omitempty" toml:"libsql,omitempty" json:"libsql,omitempty" jsonschema:"title=libSQL" jsonschema_description:"The libSQL/sqld Storage configuration settings."`
+ 
+ 	EncryptionKey string `koanf:"encryption_key" yaml:"encryption_key,omitempty" toml:"encryption_key,omitempty" json:"encryption_key,omitempty" jsonschema:"title=Encryption Key" jsonschema_description:"The Storage Encryption Key used to secure security sensitive values in the storage engine."`
+ }
+ 
++// StorageLibSQL represents the configuration when using a remote libSQL/sqld server.
++type StorageLibSQL struct {
++	URL       string `koanf:"url" yaml:"url,omitempty" toml:"url,omitempty" json:"url,omitempty" jsonschema:"title=URL" jsonschema_description:"The libSQL server URL (e.g. http://host:port/namespace)."`
++	AuthToken string `koanf:"auth_token" yaml:"auth_token,omitempty" toml:"auth_token,omitempty" json:"auth_token,omitempty" jsonschema:"title=Auth Token" jsonschema_description:"The JWT auth token presented to the libSQL server."`
++}
++
+ // StorageLocal represents the configuration when using local storage.
+ type StorageLocal struct {
+ 	Path string `koanf:"path" yaml:"path,omitempty" toml:"path,omitempty" json:"path,omitempty" jsonschema:"title=Path" jsonschema_description:"The Path for the SQLite3 database file."`
+diff --git a/internal/configuration/validator/session.go b/internal/configuration/validator/session.go
+index 469255e..93844c9 100644
+--- a/internal/configuration/validator/session.go
++++ b/internal/configuration/validator/session.go
+@@ -25,6 +25,16 @@ func ValidateSession(config *schema.Configuration, validator *schema.StructValid
+ 		}
+ 	}
+ 
++	if config.Session.LibSQL != nil {
++		if config.Session.LibSQL.URL == "" {
++			validator.Push(fmt.Errorf("session: libsql: option 'url' is required"))
++		}
++
++		if config.Session.LibSQL.Table == "" {
++			config.Session.LibSQL.Table = "session"
++		}
++	}
++
+ 	validateSession(config, validator)
+ }
+ 
+diff --git a/internal/configuration/validator/storage.go b/internal/configuration/validator/storage.go
+index 7e45e02..50f7e27 100644
+--- a/internal/configuration/validator/storage.go
++++ b/internal/configuration/validator/storage.go
+@@ -16,7 +16,7 @@ func ValidateStorage(config schema.Storage, validator *schema.StructValidator) {
+ 		validator.Push(errors.New(errStrStorageEncryptionKeyTooShort))
+ 	}
+ 
+-	if config.Local == nil && config.MySQL == nil && config.PostgreSQL == nil {
++	if config.Local == nil && config.MySQL == nil && config.PostgreSQL == nil && config.LibSQL == nil {
+ 		validator.Push(errors.New(errStrStorage))
+ 
+ 		return
+@@ -36,6 +36,10 @@ func ValidateStorage(config schema.Storage, validator *schema.StructValidator) {
+ 		configured = append(configured, "postgres")
+ 	}
+ 
++	if config.LibSQL != nil {
++		configured = append(configured, "libsql")
++	}
++
+ 	if len(configured) > 1 {
+ 		validator.Push(fmt.Errorf(errStrStorageMultiple, utils.StringJoinAnd(configured)))
+ 
+@@ -53,6 +57,16 @@ func ValidateStorage(config schema.Storage, validator *schema.StructValidator) {
+ 	if config.PostgreSQL != nil {
+ 		validatePostgreSQLConfiguration(config.PostgreSQL, validator)
+ 	}
++
++	if config.LibSQL != nil {
++		validateLibSQLConfiguration(config.LibSQL, validator)
++	}
++}
++
++func validateLibSQLConfiguration(config *schema.StorageLibSQL, validator *schema.StructValidator) {
++	if config.URL == "" {
++		validator.Push(fmt.Errorf(errFmtStorageOptionMustBeProvided, "libsql", "url"))
++	}
+ }
+ 
+ func validateSQLConfiguration(config, defaults *schema.StorageSQL, validator *schema.StructValidator, provider string) {
+diff --git a/internal/session/libsql/provider.go b/internal/session/libsql/provider.go
+new file mode 100644
+index 0000000..1cf6bff
+--- /dev/null
++++ b/internal/session/libsql/provider.go
+@@ -0,0 +1,168 @@
++// Package libsql provides a fasthttp/session Provider backed by a remote
++// libSQL/sqld server (via the go-libsql driver). It mirrors the schema and query
++// semantics of fasthttp/session's bundled sqlite3 provider, but binds the session
++// payload as a BLOB ([]byte) so Authelia's AES-GCM-encrypted (binary) session data
++// round-trips cleanly, and tunes the connection pool for sqld's Hrana stream expiry.
++package libsql
++
++import (
++	"database/sql"
++	"fmt"
++	"strings"
++	"time"
++
++	_ "github.com/tursodatabase/go-libsql" // registers the "libsql" database/sql driver (CGO).
++)
++
++// Config configures the libSQL session Provider.
++type Config struct {
++	URL       string
++	AuthToken string
++	Table     string
++}
++
++// Provider is a fasthttp/session.Provider storing sessions in libSQL/sqld.
++type Provider struct {
++	db    *sql.DB
++	table string
++
++	sqlGet        string
++	sqlSave       string
++	sqlRegenerate string
++	sqlInsert     string
++	sqlDestroy    string
++	sqlCount      string
++	sqlGC         string
++}
++
++// New opens the connection, ensures the schema exists and returns the Provider.
++func New(config Config) (provider *Provider, err error) {
++	table := config.Table
++	if table == "" {
++		table = "session"
++	}
++
++	dsn := config.URL
++
++	if config.AuthToken != "" {
++		sep := "?"
++		if strings.Contains(dsn, "?") {
++			sep = "&"
++		}
++
++		dsn = fmt.Sprintf("%s%sauthToken=%s", dsn, sep, config.AuthToken)
++	}
++
++	var db *sql.DB
++
++	if db, err = sql.Open("libsql", dsn); err != nil {
++		return nil, err
++	}
++
++	// Remote sqld expires idle Hrana streams (STREAM_EXPIRED); recycle connections early.
++	db.SetConnMaxIdleTime(2 * time.Second)
++	db.SetConnMaxLifetime(25 * time.Second)
++
++	provider = &Provider{
++		db:    db,
++		table: table,
++
++		sqlGet:        fmt.Sprintf("SELECT data FROM %s WHERE id=?", table),
++		sqlSave:       fmt.Sprintf("UPDATE %s SET data=?,last_active=?,expiration=? WHERE id=?", table),
++		sqlRegenerate: fmt.Sprintf("UPDATE %s SET id=?,last_active=?,expiration=? WHERE id=?", table),
++		sqlInsert:     fmt.Sprintf("INSERT INTO %s (id, data, last_active, expiration) VALUES (?,?,?,?)", table),
++		sqlDestroy:    fmt.Sprintf("DELETE FROM %s WHERE id=?", table),
++		sqlCount:      fmt.Sprintf("SELECT count(id) FROM %s", table),
++		sqlGC:         fmt.Sprintf("DELETE FROM %s WHERE last_active+expiration<=? AND expiration<>0", table),
++	}
++
++	schema := []string{
++		fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (id VARCHAR(64) PRIMARY KEY NOT NULL DEFAULT '', data BLOB NOT NULL, last_active BIGINT NOT NULL DEFAULT 0, expiration BIGINT NOT NULL DEFAULT 0)", table),
++		fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s_last_active ON %s (last_active)", table, table),
++		fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s_expiration ON %s (expiration)", table, table),
++	}
++
++	for _, stmt := range schema {
++		if _, err = db.Exec(stmt); err != nil {
++			return nil, err
++		}
++	}
++
++	if err = db.Ping(); err != nil {
++		return nil, err
++	}
++
++	return provider, nil
++}
++
++// Get returns the stored session payload, or empty bytes when not found.
++func (p *Provider) Get(id []byte) ([]byte, error) {
++	var data []byte
++
++	switch err := p.db.QueryRow(p.sqlGet, string(id)).Scan(&data); err {
++	case nil:
++		return data, nil
++	case sql.ErrNoRows:
++		return []byte(""), nil
++	default:
++		return nil, err
++	}
++}
++
++// Save upserts the session payload.
++func (p *Provider) Save(id, data []byte, expiration time.Duration) error {
++	now := time.Now().UnixNano()
++
++	res, err := p.db.Exec(p.sqlSave, data, now, expiration.Nanoseconds(), string(id))
++	if err != nil {
++		return err
++	}
++
++	if n, _ := res.RowsAffected(); n == 0 {
++		_, err = p.db.Exec(p.sqlInsert, string(id), data, now, expiration.Nanoseconds())
++	}
++
++	return err
++}
++
++// Destroy removes a session.
++func (p *Provider) Destroy(id []byte) error {
++	_, err := p.db.Exec(p.sqlDestroy, string(id))
++
++	return err
++}
++
++// Regenerate changes a session id, preserving its data.
++func (p *Provider) Regenerate(id, newID []byte, expiration time.Duration) error {
++	now := time.Now().UnixNano()
++
++	res, err := p.db.Exec(p.sqlRegenerate, string(newID), now, expiration.Nanoseconds(), string(id))
++	if err != nil {
++		return err
++	}
++
++	if n, _ := res.RowsAffected(); n == 0 {
++		_, err = p.db.Exec(p.sqlInsert, string(newID), []byte(""), now, expiration.Nanoseconds())
++	}
++
++	return err
++}
++
++// Count returns the number of stored sessions.
++func (p *Provider) Count() int {
++	var n int
++
++	_ = p.db.QueryRow(p.sqlCount).Scan(&n)
++
++	return n
++}
++
++// NeedGC reports that this provider requires periodic garbage collection.
++func (p *Provider) NeedGC() bool { return true }
++
++// GC deletes expired sessions.
++func (p *Provider) GC() error {
++	_, err := p.db.Exec(p.sqlGC, time.Now().UnixNano())
++
++	return err
++}
+diff --git a/internal/session/provider_config.go b/internal/session/provider_config.go
+index 235fd13..c9cc1f0 100644
+--- a/internal/session/provider_config.go
++++ b/internal/session/provider_config.go
+@@ -14,6 +14,7 @@ import (
+ 
+ 	"github.com/authelia/authelia/v4/internal/configuration/schema"
+ 	"github.com/authelia/authelia/v4/internal/logging"
++	sessionlibsql "github.com/authelia/authelia/v4/internal/session/libsql"
+ 	"github.com/authelia/authelia/v4/internal/session/memory"
+ 	"github.com/authelia/authelia/v4/internal/utils"
+ )
+@@ -96,6 +97,17 @@ func NewProviderConfigAndSession(config schema.SessionCookie, providerName strin
+ func NewSessionProvider(config schema.Session, certPool *x509.CertPool) (name string, provider session.Provider, serializer Serializer, err error) {
+ 	// If redis configuration is provided, then use the redis provider.
+ 	switch {
++	case config.LibSQL != nil:
++		// Sessions persisted in a remote libSQL/sqld server. Encryption is mandatory.
++		serializer = NewEncryptingSerializer(config.Secret)
++
++		name = "libsql"
++
++		provider, err = sessionlibsql.New(sessionlibsql.Config{
++			URL:       config.LibSQL.URL,
++			AuthToken: config.LibSQL.AuthToken,
++			Table:     config.LibSQL.Table,
++		})
+ 	case config.Redis != nil:
+ 		serializer = NewEncryptingSerializer(config.Secret)
+ 
+diff --git a/internal/storage/const.go b/internal/storage/const.go
+index f31e819..be5e990 100644
+--- a/internal/storage/const.go
++++ b/internal/storage/const.go
+@@ -60,6 +60,7 @@ const (
+ 	providerMySQL    = "mysql"
+ 	providerPostgres = "postgres"
+ 	providerSQLite   = "sqlite"
++	providerLibSQL   = "libsql"
+ )
+ 
+ const (
+diff --git a/internal/storage/migrations/libsql/V0001.Initial_Schema.down.sql b/internal/storage/migrations/libsql/V0001.Initial_Schema.down.sql
+new file mode 100644
+index 0000000..c24a1ac
+--- /dev/null
++++ b/internal/storage/migrations/libsql/V0001.Initial_Schema.down.sql
+@@ -0,0 +1,26 @@
++-- libSQL squashed initial schema rollback.
++DROP TABLE IF EXISTS authentication_logs;
++DROP TABLE IF EXISTS banned_ip;
++DROP TABLE IF EXISTS banned_user;
++DROP TABLE IF EXISTS cached_data;
++DROP TABLE IF EXISTS duo_devices;
++DROP TABLE IF EXISTS encryption;
++DROP TABLE IF EXISTS identity_verification;
++DROP TABLE IF EXISTS migrations;
++DROP TABLE IF EXISTS oauth2_access_token_session;
++DROP TABLE IF EXISTS oauth2_authorization_code_session;
++DROP TABLE IF EXISTS oauth2_blacklisted_jti;
++DROP TABLE IF EXISTS oauth2_consent_preconfiguration;
++DROP TABLE IF EXISTS oauth2_consent_session;
++DROP TABLE IF EXISTS oauth2_device_code_session;
++DROP TABLE IF EXISTS oauth2_openid_connect_session;
++DROP TABLE IF EXISTS oauth2_par_context;
++DROP TABLE IF EXISTS oauth2_pkce_request_session;
++DROP TABLE IF EXISTS oauth2_refresh_token_session;
++DROP TABLE IF EXISTS one_time_code;
++DROP TABLE IF EXISTS totp_configurations;
++DROP TABLE IF EXISTS totp_history;
++DROP TABLE IF EXISTS user_opaque_identifier;
++DROP TABLE IF EXISTS user_preferences;
++DROP TABLE IF EXISTS webauthn_credentials;
++DROP TABLE IF EXISTS webauthn_users;
+diff --git a/internal/storage/migrations/libsql/V0001.Initial_Schema.up.sql b/internal/storage/migrations/libsql/V0001.Initial_Schema.up.sql
+new file mode 100644
+index 0000000..8ee796c
+--- /dev/null
++++ b/internal/storage/migrations/libsql/V0001.Initial_Schema.up.sql
+@@ -0,0 +1,380 @@
++-- libSQL squashed initial schema (equivalent to sqlite migrations V0001..V0024 at authelia v4.39.20).
++-- Fresh-install only: this PoC does not replay the historical sqlite migrations (UDF/PRAGMA/rebuilds).
++CREATE TABLE identity_verification (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    jti VARCHAR(36),
++    iat DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    issued_ip VARCHAR(39) NOT NULL,
++    exp DATETIME NOT NULL,
++    username VARCHAR(100) NOT NULL,
++    action VARCHAR(50) NOT NULL,
++    consumed DATETIME NULL DEFAULT NULL,
++    consumed_ip VARCHAR(39) NULL DEFAULT NULL
++, revoked DATETIME NULL DEFAULT NULL, revoked_ip VARCHAR(39) NULL DEFAULT NULL);
++CREATE UNIQUE INDEX identity_verification_jti_key ON identity_verification (jti);
++CREATE TABLE totp_configurations (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    last_used_at DATETIME NULL DEFAULT NULL,
++    username VARCHAR(100) NOT NULL,
++    issuer VARCHAR(100),
++    algorithm VARCHAR(6) NOT NULL DEFAULT 'SHA1',
++    digits INTEGER NOT NULL DEFAULT 6,
++    period INTEGER NOT NULL DEFAULT 30,
++    secret BLOB NOT NULL
++);
++CREATE UNIQUE INDEX totp_configurations_username_key ON totp_configurations (username);
++CREATE TABLE duo_devices (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    username VARCHAR(100) NOT NULL,
++    device VARCHAR(32) NOT NULL,
++    method VARCHAR(16) NOT NULL
++);
++CREATE UNIQUE INDEX duo_devices_username_key ON duo_devices (username);
++CREATE TABLE user_preferences (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    username VARCHAR(100) NOT NULL,
++    second_factor_method VARCHAR(11) NOT NULL
++);
++CREATE UNIQUE INDEX user_preferences_username_key ON user_preferences (username);
++CREATE TABLE encryption (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    name VARCHAR(100),
++    value BLOB NOT NULL
++);
++CREATE UNIQUE INDEX encryption_name_key ON encryption (name);
++CREATE TABLE user_opaque_identifier (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    service VARCHAR(20) NOT NULL,
++    sector_id VARCHAR(255) NOT NULL,
++    username VARCHAR(100) NOT NULL,
++    identifier CHAR(36) NOT NULL
++);
++CREATE UNIQUE INDEX user_opaque_identifier_lookup_key ON user_opaque_identifier (service, sector_id, username);
++CREATE UNIQUE INDEX user_opaque_identifier_identifier_key ON user_opaque_identifier (identifier);
++CREATE TABLE authentication_logs (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    successful BOOLEAN NOT NULL,
++    banned BOOLEAN NOT NULL DEFAULT FALSE,
++    username VARCHAR(100) NOT NULL,
++    auth_type VARCHAR(8) NOT NULL DEFAULT '1FA',
++    remote_ip VARCHAR(39) NULL DEFAULT NULL,
++    request_uri TEXT,
++    request_method VARCHAR(8) NOT NULL DEFAULT ''
++);
++CREATE INDEX authentication_logs_username_idx ON authentication_logs (time, username, auth_type);
++CREATE INDEX authentication_logs_remote_ip_idx ON authentication_logs (time, remote_ip, auth_type);
++CREATE TABLE migrations (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    applied DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    version_before INTEGER NULL DEFAULT NULL,
++    version_after INTEGER NOT NULL,
++    application_version VARCHAR(128) NOT NULL
++);
++CREATE TABLE oauth2_blacklisted_jti (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    signature VARCHAR(64) NOT NULL,
++    expires_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
++);
++CREATE UNIQUE INDEX oauth2_blacklisted_jti_signature_key ON oauth2_blacklisted_jti (signature);
++CREATE TABLE oauth2_consent_preconfiguration (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    client_id VARCHAR(255) NOT NULL,
++    subject CHAR(36) NOT NULL,
++    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    expires_at DATETIME NULL DEFAULT NULL,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    scopes TEXT NOT NULL,
++    audience TEXT NULL, requested_claims TEXT NULL, signature_claims CHAR(64) NULL, granted_claims TEXT DEFAULT '',
++    CONSTRAINT oauth2_consent_preconfiguration_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE TABLE oauth2_par_context (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    signature VARCHAR(255) NOT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    scopes TEXT NOT NULL,
++    audience TEXT NOT NULL,
++    handled_response_types TEXT NOT NULL,
++    response_mode TEXT NOT NULL,
++    response_mode_default TEXT NOT NULL,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL
++);
++CREATE UNIQUE INDEX oauth2_par_context_signature_key ON oauth2_par_context (signature);
++CREATE TABLE webauthn_credentials (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    last_used_at DATETIME NULL DEFAULT NULL,
++    rpid VARCHAR(512) NOT NULL,
++    username VARCHAR(100) NOT NULL,
++    description VARCHAR(64) NOT NULL,
++    kid VARCHAR(512) NOT NULL,
++    aaguid CHAR(36) NULL,
++    attestation_format VARCHAR(32),
++    attachment VARCHAR(64),
++    transport VARCHAR(64) DEFAULT '',
++    sign_count INTEGER DEFAULT 0,
++    clone_warning BOOLEAN NOT NULL DEFAULT FALSE,
++    legacy BOOLEAN NOT NULL DEFAULT FALSE,
++    discoverable BOOLEAN NOT NULL,
++    present BOOLEAN NOT NULL DEFAULT FALSE,
++    verified BOOLEAN NOT NULL DEFAULT FALSE,
++    backup_eligible BOOLEAN NOT NULL DEFAULT FALSE,
++    backup_state BOOLEAN NOT NULL DEFAULT FALSE,
++    public_key BLOB NOT NULL
++, attestation BLOB NULL DEFAULT NULL, attestation_type VARCHAR(32) NOT NULL DEFAULT '');
++CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (kid);
++CREATE UNIQUE INDEX webauthn_credentials_lookup_key ON webauthn_credentials (rpid, username, description);
++CREATE TABLE webauthn_users (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    rpid VARCHAR(512) NOT NULL,
++    username VARCHAR(100) NOT NULL,
++    userid CHAR(64) NOT NULL
++);
++CREATE UNIQUE INDEX webauthn_users_lookup_key ON webauthn_users (rpid, username);
++CREATE TABLE one_time_code (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    public_id CHAR(36) NOT NULL,
++    signature VARCHAR(128) NOT NULL,
++    issued DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    issued_ip VARCHAR(39) NOT NULL,
++    expires DATETIME NOT NULL,
++    username VARCHAR(100) NOT NULL,
++    intent VARCHAR(100) NOT NULL,
++    consumed DATETIME NULL DEFAULT NULL,
++    consumed_ip VARCHAR(39) NULL DEFAULT NULL,
++    revoked DATETIME NULL DEFAULT NULL,
++    revoked_ip VARCHAR(39) NULL DEFAULT NULL,
++    code BLOB NOT NULL
++);
++CREATE UNIQUE INDEX one_time_code_lookup_key ON one_time_code (signature, username);
++CREATE TABLE totp_history (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    username VARCHAR(100) NOT NULL,
++    step CHAR(64) NOT NULL
++);
++CREATE UNIQUE INDEX totp_history_lookup_key ON totp_history (username, step);
++CREATE TABLE oauth2_consent_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    subject CHAR(36) NULL DEFAULT NULL,
++    authorized BOOLEAN NOT NULL DEFAULT FALSE,
++    granted BOOLEAN NOT NULL DEFAULT FALSE,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    responded_at DATETIME NULL DEFAULT NULL,
++    form_data TEXT NOT NULL,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    preconfiguration INTEGER NULL DEFAULT NULL, granted_claims TEXT NULL, expires_at TIMESTAMP NOT NULL DEFAULT '2000-01-01 00:00:00.000000000+00:00',
++    CONSTRAINT oauth2_consent_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT,
++    CONSTRAINT oauth2_consent_session_preconfiguration_fkey
++        FOREIGN KEY (preconfiguration)
++            REFERENCES oauth2_consent_preconfiguration (id) ON UPDATE CASCADE ON DELETE CASCADE
++);
++CREATE UNIQUE INDEX oauth2_consent_session_challenge_id_key ON oauth2_consent_session (challenge_id);
++CREATE TABLE oauth2_authorization_code_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NOT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(255) NOT NULL,
++    subject CHAR(36) NOT NULL,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_authorization_code_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_authorization_code_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_authorization_code_session_request_id_idx ON oauth2_authorization_code_session (request_id);
++CREATE INDEX oauth2_authorization_code_session_client_id_idx ON oauth2_authorization_code_session (client_id);
++CREATE INDEX oauth2_authorization_code_session_client_id_subject_idx ON oauth2_authorization_code_session (client_id, subject);
++CREATE TABLE oauth2_access_token_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NULL DEFAULT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(768) NOT NULL,
++    subject CHAR(36) NULL DEFAULT NULL,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_access_token_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_access_token_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_access_token_session_request_id_idx ON oauth2_access_token_session (request_id);
++CREATE INDEX oauth2_access_token_session_client_id_idx ON oauth2_access_token_session (client_id);
++CREATE INDEX oauth2_access_token_session_client_id_subject_idx ON oauth2_access_token_session (client_id, subject);
++CREATE TABLE oauth2_refresh_token_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NOT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(255) NOT NULL,
++    subject CHAR(36) NOT NULL,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_refresh_token_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_refresh_token_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_refresh_token_session_request_id_idx ON oauth2_refresh_token_session (request_id);
++CREATE INDEX oauth2_refresh_token_session_client_id_idx ON oauth2_refresh_token_session (client_id);
++CREATE INDEX oauth2_refresh_token_session_client_id_subject_idx ON oauth2_refresh_token_session (client_id, subject);
++CREATE TABLE oauth2_pkce_request_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NOT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(255) NOT NULL,
++    subject CHAR(36) NOT NULL,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_pkce_request_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_pkce_request_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_pkce_request_session_request_id_idx ON oauth2_pkce_request_session (request_id);
++CREATE INDEX oauth2_pkce_request_session_client_id_idx ON oauth2_pkce_request_session (client_id);
++CREATE INDEX oauth2_pkce_request_session_client_id_subject_idx ON oauth2_pkce_request_session (client_id, subject);
++CREATE TABLE oauth2_openid_connect_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NOT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(255) NOT NULL,
++    subject CHAR(36) NOT NULL,
++    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_openid_connect_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_openid_connect_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_openid_connect_session_request_id_idx ON oauth2_openid_connect_session (request_id);
++CREATE INDEX oauth2_openid_connect_session_client_id_idx ON oauth2_openid_connect_session (client_id);
++CREATE INDEX oauth2_openid_connect_session_client_id_subject_idx ON oauth2_openid_connect_session (client_id, subject);
++CREATE TABLE oauth2_device_code_session (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    challenge_id CHAR(36) NULL DEFAULT NULL,
++    request_id VARCHAR(40) NOT NULL,
++    client_id VARCHAR(255) NOT NULL,
++    signature VARCHAR(255) NOT NULL,
++    user_code_signature VARCHAR(255) NOT NULL,
++    status INTEGER NOT NULL,
++    subject CHAR(36) NULL DEFAULT NULL,
++    requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    checked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    requested_scopes TEXT NOT NULL,
++    granted_scopes TEXT NOT NULL,
++    requested_audience TEXT NULL DEFAULT '',
++    granted_audience TEXT NULL DEFAULT '',
++    active BOOLEAN NOT NULL DEFAULT FALSE,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    form_data TEXT NOT NULL,
++    session_data BLOB NOT NULL,
++    CONSTRAINT oauth2_device_code_session_challenge_id_fkey
++        FOREIGN KEY (challenge_id)
++            REFERENCES oauth2_consent_session (challenge_id) ON UPDATE CASCADE ON DELETE CASCADE,
++    CONSTRAINT oauth2_device_code_session_subject_fkey
++        FOREIGN KEY (subject)
++            REFERENCES user_opaque_identifier (identifier) ON UPDATE CASCADE ON DELETE RESTRICT
++);
++CREATE INDEX oauth2_device_code_session_request_id_idx ON oauth2_device_code_session (request_id);
++CREATE INDEX oauth2_device_code_session_client_id_idx ON oauth2_device_code_session (client_id);
++CREATE INDEX oauth2_device_code_session_client_id_subject_idx ON oauth2_device_code_session (client_id, subject);
++CREATE TABLE cached_data (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    updated_at DATETIME NOT NULL,
++    name VARCHAR(20) NOT NULL,
++    encrypted BOOLEAN NOT NULL DEFAULT FALSE,
++    value BLOB NOT NULL
++);
++CREATE UNIQUE INDEX cached_data_name_key ON cached_data (name);
++CREATE TABLE banned_user (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    expires TIMESTAMP NULL DEFAULT NULL,
++    expired TIMESTAMP NULL DEFAULT NULL,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    username VARCHAR(100) NOT NULL,
++    source VARCHAR(10) NOT NULL,
++    reason VARCHAR(100) NULL DEFAULT NULL
++);
++CREATE INDEX banned_user_username_idx ON banned_user (username);
++CREATE INDEX banned_user_lookup_idx ON banned_user (username, revoked, expires, expired);
++CREATE INDEX banned_user_list_idx ON banned_user (revoked, expires, expired);
++CREATE TABLE banned_ip (
++    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
++    time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    expires TIMESTAMP NULL DEFAULT NULL,
++    expired TIMESTAMP NULL DEFAULT NULL,
++    revoked BOOLEAN NOT NULL DEFAULT FALSE,
++    ip VARCHAR(39) NOT NULL,
++    source VARCHAR(10) NOT NULL,
++    reason VARCHAR(100) NULL DEFAULT NULL
++);
++CREATE INDEX banned_ip_ip_idx ON banned_ip (ip);
++CREATE INDEX banned_ip_lookup_idx ON banned_ip (ip, revoked, expires, expired);
++CREATE INDEX banned_ip_list_idx ON banned_ip (revoked, expires, expired);
+diff --git a/internal/storage/sql_provider.go b/internal/storage/sql_provider.go
+index 69bbb5d..ce275a8 100644
+--- a/internal/storage/sql_provider.go
++++ b/internal/storage/sql_provider.go
+@@ -29,6 +29,8 @@ func NewProvider(config *schema.Configuration, caCertPool *x509.CertPool) (provi
+ 		return NewMySQLProvider(config, caCertPool)
+ 	case config.Storage.Local != nil:
+ 		return NewSQLiteProvider(config)
++	case config.Storage.LibSQL != nil:
++		return NewLibSQLProvider(config)
+ 	default:
+ 		return nil
+ 	}
+diff --git a/internal/storage/sql_provider_backend_libsql.go b/internal/storage/sql_provider_backend_libsql.go
+new file mode 100644
+index 0000000..d43955f
+--- /dev/null
++++ b/internal/storage/sql_provider_backend_libsql.go
+@@ -0,0 +1,57 @@
++package storage
++
++import (
++	"fmt"
++	"strings"
++	"time"
++
++	sqlx "github.com/rpadovani/sqlx-v2"
++	_ "github.com/tursodatabase/go-libsql" // registers the "libsql" database/sql driver (CGO).
++
++	"github.com/authelia/authelia/v4/internal/configuration/schema"
++)
++
++// LibSQLProvider is a libSQL/sqld provider. libSQL is SQLite-compatible, so this
++// reuses the SQLite SQL dialect, queries and migrations directory naming; only the
++// driver name and DSN differ. It talks to a remote sqld over Hrana via go-libsql.
++type LibSQLProvider struct {
++	SQLProvider
++}
++
++// NewLibSQLProvider constructs a libSQL provider talking to a remote sqld server.
++func NewLibSQLProvider(config *schema.Configuration) (provider *LibSQLProvider) {
++	provider = &LibSQLProvider{
++		SQLProvider: NewSQLProvider(config, providerLibSQL, "libsql", libsqlDataSourceName(config.Storage.LibSQL)),
++	}
++
++	// libSQL is SQLite-compatible: reuse the SQLite existing-tables query.
++	provider.sqlSelectExistingTables = querySQLiteSelectExistingTables
++
++	// Remote sqld expires idle Hrana streams (STREAM_EXPIRED error on reuse). Recycle
++	// idle/old pooled connections well before that so we never reuse an expired stream.
++	if wrap, ok := provider.db.(*SQLXWrapDB); ok {
++		wrap.SetConnMaxIdleTime(2 * time.Second)
++		wrap.SetConnMaxLifetime(25 * time.Second)
++	}
++
++	return provider
++}
++
++// libsqlDataSourceName builds the go-libsql DSN from the configured URL and optional auth token.
++func libsqlDataSourceName(config *schema.StorageLibSQL) (dsn string) {
++	if config.AuthToken == "" {
++		return config.URL
++	}
++
++	sep := "?"
++	if strings.Contains(config.URL, "?") {
++		sep = "&"
++	}
++
++	return fmt.Sprintf("%s%sauthToken=%s", config.URL, sep, config.AuthToken)
++}
++
++func init() {
++	// libSQL uses SQLite-style "?" positional placeholders; tell sqlx so Rebind is a no-op.
++	sqlx.BindDriver("libsql", sqlx.QUESTION)
++}
+diff --git a/internal/storage/sql_provider_backend_sqlite.go b/internal/storage/sql_provider_backend_sqlite.go
+index a7e8d59..f31fa18 100644
+--- a/internal/storage/sql_provider_backend_sqlite.go
++++ b/internal/storage/sql_provider_backend_sqlite.go
+@@ -1,15 +1,18 @@
+ package storage
+ 
+ import (
+-	"database/sql"
+-	"encoding/base64"
+-
+-	"github.com/mattn/go-sqlite3"
++	_ "github.com/tursodatabase/go-libsql" // local SQLite served by go-libsql in this libsql-focused build.
+ 
+ 	"github.com/authelia/authelia/v4/internal/configuration/schema"
+ )
+ 
+ // SQLiteProvider is a SQLite3 provider.
++//
++// In this libsql-focused build the local SQLite backend is served by the go-libsql
++// driver in local-file mode. This avoids linking a second SQLite C implementation
++// (mattn/go-sqlite3) alongside go-libsql, which would collide on the sqlite3 C symbols.
++// As a consequence the BIN2B64/B642BIN user functions used by the legacy sqlite
++// migrations are unavailable for the local backend; use the libsql backend instead.
+ type SQLiteProvider struct {
+ 	SQLProvider
+ }
+@@ -17,7 +20,7 @@ type SQLiteProvider struct {
+ // NewSQLiteProvider constructs a SQLite provider.
+ func NewSQLiteProvider(config *schema.Configuration) (provider *SQLiteProvider) {
+ 	provider = &SQLiteProvider{
+-		SQLProvider: NewSQLProvider(config, providerSQLite, "sqlite3e", config.Storage.Local.Path),
++		SQLProvider: NewSQLProvider(config, providerSQLite, "libsql", "file:"+config.Storage.Local.Path),
+ 	}
+ 
+ 	// All providers have differing SELECT existing table statements.
+@@ -25,27 +28,3 @@ func NewSQLiteProvider(config *schema.Configuration) (provider *SQLiteProvider)
+ 
+ 	return provider
+ }
+-
+-func sqlite3BLOBToTEXTBase64(data []byte) (b64 string) {
+-	return base64.StdEncoding.EncodeToString(data)
+-}
+-
+-func sqlite3TEXTBase64ToBLOB(b64 string) (data []byte, err error) {
+-	return base64.StdEncoding.DecodeString(b64)
+-}
+-
+-func init() {
+-	sql.Register("sqlite3e", &sqlite3.SQLiteDriver{
+-		ConnectHook: func(conn *sqlite3.SQLiteConn) (err error) {
+-			if err = conn.RegisterFunc("BIN2B64", sqlite3BLOBToTEXTBase64, true); err != nil {
+-				return err
+-			}
+-
+-			if err = conn.RegisterFunc("B642BIN", sqlite3TEXTBase64ToBLOB, true); err != nil {
+-				return err
+-			}
+-
+-			return nil
+-		},
+-	})
+-}
+diff --git a/internal/storage/sql_provider_schema.go b/internal/storage/sql_provider_schema.go
+index 6a9241c..14f97c2 100644
+--- a/internal/storage/sql_provider_schema.go
++++ b/internal/storage/sql_provider_schema.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"strconv"
++	"strings"
+ 	"time"
+ 
+ 	"github.com/rpadovani/sqlx-v2"
+@@ -19,7 +20,7 @@ func (p *SQLProvider) truncate(ctx context.Context, conn SQLXConnection, table s
+ 		_, err = conn.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s;", table))
+ 	case providerPostgres:
+ 		_, err = conn.ExecContext(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table))
+-	case providerSQLite:
++	case providerSQLite, providerLibSQL:
+ 		err = p.truncateSQLite3(ctx, conn, table)
+ 	default:
+ 		err = fmt.Errorf("unsupported provider: %s", p.name)
+@@ -280,9 +281,33 @@ func (p *SQLProvider) schemaMigrateLock(ctx context.Context, conn SQLXConnection
+ 	return nil
+ }
+ 
++// schemaMigrateExec executes a migration's SQL. The libsql driver (go-libsql) only
++// runs the first statement of a multi-statement Exec, so for libsql the script is
++// split into individual statements executed in order. The libsql migration files are
++// plain DDL (no triggers, no ';' inside string literals), so a simple split is safe.
++func (p *SQLProvider) schemaMigrateExec(ctx context.Context, conn SQLXConnection, query string) (err error) {
++	if p.name != providerLibSQL {
++		_, err = conn.ExecContext(ctx, query)
++
++		return err
++	}
++
++	for _, stmt := range strings.Split(query, ";") {
++		if strings.TrimSpace(stmt) == "" {
++			continue
++		}
++
++		if _, err = conn.ExecContext(ctx, stmt); err != nil {
++			return err
++		}
++	}
++
++	return nil
++}
++
+ func (p *SQLProvider) schemaMigrateApply(ctx context.Context, conn SQLXConnection, migration model.SchemaMigration) (err error) {
+ 	if migration.NotEmpty() {
+-		if _, err = conn.ExecContext(ctx, migration.Query); err != nil {
++		if err = p.schemaMigrateExec(ctx, conn, migration.Query); err != nil {
+ 			return fmt.Errorf(errFmtFailedMigration, migration.Version, migration.Name, err)
+ 		}
+ 

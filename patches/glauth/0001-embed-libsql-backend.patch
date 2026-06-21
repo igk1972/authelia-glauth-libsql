@@ -1,0 +1,238 @@
+diff --git a/v2/go.mod b/v2/go.mod
+index 69a7fc5..371e117 100644
+--- a/v2/go.mod
++++ b/v2/go.mod
+@@ -30,6 +30,7 @@ require (
+ )
+ 
+ require (
++	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+ 	github.com/beorn7/perks v1.0.1 // indirect
+ 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+ 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
+@@ -40,6 +41,7 @@ require (
+ 	github.com/golang/protobuf v1.5.3 // indirect
+ 	github.com/gorilla/websocket v1.5.0 // indirect
+ 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
++	github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06 // indirect
+ 	github.com/mattn/go-colorable v0.1.13 // indirect
+ 	github.com/mattn/go-isatty v0.0.19 // indirect
+ 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
+@@ -47,8 +49,10 @@ require (
+ 	github.com/prometheus/procfs v0.12.0 // indirect
+ 	github.com/rickb777/date v1.12.4 // indirect
+ 	github.com/rickb777/plural v1.2.0 // indirect
++	github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04 // indirect
+ 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
+ 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
++	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
+ 	golang.org/x/net v0.17.0 // indirect
+ 	golang.org/x/sys v0.16.0 // indirect
+ 	golang.org/x/text v0.14.0 // indirect
+diff --git a/v2/go.sum b/v2/go.sum
+index e52b185..2f97fed 100644
+--- a/v2/go.sum
++++ b/v2/go.sum
+@@ -3,6 +3,8 @@ github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8
+ github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
+ github.com/GeertJohan/yubigo v0.0.0-20190917122436-175bc097e60e h1:Bqtt5C+uVk+vH/t5dmB47uDCTwxw16EYHqvJnmY2aQc=
+ github.com/GeertJohan/yubigo v0.0.0-20190917122436-175bc097e60e/go.mod h1:njRCDrl+1RQ/A/+KVU8Ho2EWAxUSkohOWczdW3dzDG0=
++github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=
++github.com/antlr4-go/antlr/v4 v4.13.0/go.mod h1:pfChB/xh/Unjila75QW7+VU4TSnWnnk9UTnmpPaOR2g=
+ github.com/arl/statsviz v0.6.0 h1:jbW1QJkEYQkufd//4NDYRSNBpwJNrdzPahF7ZmoGdyE=
+ github.com/arl/statsviz v0.6.0/go.mod h1:0toboo+YGSUXDaS4g1D5TVS4dXs7S7YYT5J/qnW2h8s=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+@@ -14,6 +16,7 @@ github.com/cenkalti/backoff/v4 v4.2.1/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyY
+ github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj44=
+ github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+ github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
++github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+ github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815 h1:bWDMxwH3px2JBh6AyO7hdCn/PkvCZXii8TGj7sbtEbQ=
+ github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
+ github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
+@@ -48,6 +51,8 @@ github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
+ github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
+ github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
+ github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
++github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06 h1:JLvn7D+wXjH9g4Jsjo+VqmzTUpl/LX7vfr6VOfSWTdM=
++github.com/libsql/sqlite-antlr4-parser v0.0.0-20240327125255-dbf53b6cbf06/go.mod h1:FUkZ5OHjlGPjnM2UyGJz9TypXQFgYqw6AFNO1UiROTM=
+ github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
+ github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
+ github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/yFXSvRLM=
+@@ -81,6 +86,8 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
+ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
+ github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
++github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04 h1:9nlqEMruvXDPynGbZ0RE67kKnkkg3NdnjGccvRABefc=
++github.com/tursodatabase/go-libsql v0.0.0-20260424063416-3051e37e6e04/go.mod h1:TjsB2miB8RW2Sse8sdxzVTdeGlx74GloD5zJYUC38d8=
+ github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.3 h1:LNi0Qa7869/loPjz2kmMvp/jwZZnMZ9scMJKhDJ1DIo=
+ github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.3/go.mod h1:jyigonKik3C5V895QNiAGpKYKEvFuqjw9qAEZks1mUg=
+ github.com/yaegashi/msgraph.go v0.1.4 h1:leDXSczAbwBpYFSmmZrdByTiPoUw8dbTfNMetAjJvbw=
+@@ -117,6 +124,8 @@ golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8U
+ golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+ golang.org/x/crypto v0.18.0 h1:PGVlW0xEltQnzFZ55hkuX5+KLyrMYhHld1YHO4AKcdc=
+ golang.org/x/crypto v0.18.0/go.mod h1:R0j02AL6hcrfOiy9T4ZYp/rcWeMxM3L6QYxlOuEG1mg=
++golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc h1:mCRnTeVUjcrhlRmO0VK8a6k6Rrf6TF9htwo2pJVSjIU=
++golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc/go.mod h1:V1LtkGg67GoY2N1AnLN78QLrzxkLyJw7RJb1gzOOz9w=
+ golang.org/x/mod v0.2.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+ golang.org/x/mod v0.3.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
+ golang.org/x/net v0.0.0-20180724234803-3673e40ba225/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+diff --git a/v2/pkg/embed/libsql.go b/v2/pkg/embed/libsql.go
+new file mode 100644
+index 0000000..dd411af
+--- /dev/null
++++ b/v2/pkg/embed/libsql.go
+@@ -0,0 +1,79 @@
++//go:build embedlibsql
++
++// Package embed (libsql variant) provides a libsql-backed glauth datastore that
++// is compiled directly into the glauth binary (datastore = "embed"), avoiding the
++// fragile Go-plugin (.so) mechanism. It mirrors the upstream glauth-sqlite backend
++// but talks to a remote sqld over Hrana via the go-libsql driver.
++//
++// The schema and all runtime queries are SQLite-compatible, so they are reused
++// verbatim from the sqlite backend (the only fix is the upstream "TYEXT" typo).
++package embed
++
++import (
++	"database/sql"
++
++	// go-libsql registers the database/sql driver "libsql" (CGO).
++	_ "github.com/tursodatabase/go-libsql"
++
++	"github.com/glauth/glauth/v2/pkg/handler"
++	"github.com/glauth/glauth/v2/pkg/plugins"
++)
++
++// LibsqlBackend implements plugins.SqlBackend against a libsql/sqld database.
++type LibsqlBackend struct{}
++
++// NewLibsqlHandler builds a glauth handler backed by libsql.
++func NewLibsqlHandler(opts ...handler.Option) handler.Handler {
++	return plugins.NewDatabaseHandler(LibsqlBackend{}, opts...)
++}
++
++func (b LibsqlBackend) GetDriverName() string { return "libsql" }
++
++func (b LibsqlBackend) GetPrepareSymbol() string { return "?" }
++
++// CreateSchema creates the glauth tables if they do not exist. Each statement is
++// executed on its own (go-libsql's Exec only runs the first statement of a
++// multi-statement string).
++func (b LibsqlBackend) CreateSchema(db *sql.DB) {
++	stmts := []string{
++		`CREATE TABLE IF NOT EXISTS users (
++	id INTEGER PRIMARY KEY,
++	name TEXT NOT NULL,
++	uidnumber INTEGER NOT NULL,
++	primarygroup INTEGER NOT NULL,
++	othergroups TEXT DEFAULT '',
++	givenname TEXT DEFAULT '',
++	sn TEXT DEFAULT '',
++	mail TEXT DEFAULT '',
++	loginshell TEXT DEFAULT '',
++	homedirectory TEXT DEFAULT '',
++	disabled SMALLINT DEFAULT 0,
++	passsha256 TEXT DEFAULT '',
++	passbcrypt TEXT DEFAULT '',
++	otpsecret TEXT DEFAULT '',
++	yubikey TEXT DEFAULT '',
++	sshkeys TEXT DEFAULT '',
++	custattr TEXT DEFAULT '{}')`,
++		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_name on users(name)`,
++		`CREATE TABLE IF NOT EXISTS ldapgroups (id INTEGER PRIMARY KEY, name TEXT NOT NULL, gidnumber INTEGER NOT NULL)`,
++		`CREATE UNIQUE INDEX IF NOT EXISTS idx_group_name on ldapgroups(name)`,
++		`CREATE TABLE IF NOT EXISTS includegroups (id INTEGER PRIMARY KEY, parentgroupid INTEGER NOT NULL, includegroupid INTEGER NOT NULL)`,
++		`CREATE TABLE IF NOT EXISTS capabilities (id INTEGER PRIMARY KEY, userid INTEGER NOT NULL, action TEXT NOT NULL, object TEXT NOT NULL)`,
++	}
++	for _, s := range stmts {
++		// Errors are intentionally ignored to match upstream behavior (IF NOT EXISTS).
++		_, _ = db.Exec(s)
++	}
++}
++
++// MigrateSchema applies legacy fixups. On a fresh libsql database these are all
++// no-ops (the sshkeys column already exists; the legacy "groups" table does not).
++func (b LibsqlBackend) MigrateSchema(db *sql.DB, checker func(*sql.DB, string, string) bool) {
++	if !checker(db, "users", "sshkeys") {
++		_, _ = db.Exec("ALTER TABLE users ADD COLUMN sshkeys TEXT DEFAULT ''")
++	}
++	if checker(db, "groups", "name") {
++		_, _ = db.Exec("DROP TABLE ldapgroups")
++		_, _ = db.Exec("ALTER TABLE groups RENAME TO ldapgroups")
++	}
++}
+diff --git a/v2/pkg/plugins/basesqlhandler.go b/v2/pkg/plugins/basesqlhandler.go
+index ceb517b..ce473a9 100644
+--- a/v2/pkg/plugins/basesqlhandler.go
++++ b/v2/pkg/plugins/basesqlhandler.go
+@@ -12,6 +12,7 @@ import (
+ 	"sort"
+ 	"strconv"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/rs/zerolog"
+ 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+@@ -62,12 +63,27 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.H
+ 	options := handler.NewOptions(opts...)
+ 
+ 	// Note: we will never terminate this connection pool.
+-	db, err := otelsql.Open(
+-		sqlBackend.GetDriverName(),
+-		options.Backend.Database,
+-		otelsql.WithAttributes(otlpDriverAttribute(sqlBackend)),
+-		otelsql.WithDBName(options.Backend.Database),
+-	)
++	var db *sql.DB
++	var err error
++	if sqlBackend.GetDriverName() == "libsql" {
++		// go-libsql returns driver.ErrSkip from some fast paths, which the otelsql
++		// wrapper (v0.2.3) surfaces as a fatal Ping error. Use the plain
++		// database/sql opener for libsql (DB-layer OTEL tracing is not needed here).
++		db, err = sql.Open(sqlBackend.GetDriverName(), options.Backend.Database)
++		if err == nil {
++			// Remote sqld expires idle Hrana streams (STREAM_EXPIRED). Recycle idle
++			// connections well before that so we never reuse an expired stream.
++			db.SetConnMaxIdleTime(2 * time.Second)
++			db.SetConnMaxLifetime(25 * time.Second)
++		}
++	} else {
++		db, err = otelsql.Open(
++			sqlBackend.GetDriverName(),
++			options.Backend.Database,
++			otelsql.WithAttributes(otlpDriverAttribute(sqlBackend)),
++			otelsql.WithDBName(options.Backend.Database),
++		)
++	}
+ 
+ 	if err != nil {
+ 		options.Logger.Error().Err(err).Msg(fmt.Sprintf("unable to open SQL database named '%s'", options.Backend.Database))
+diff --git a/v2/pkg/server/embed_libsql.go b/v2/pkg/server/embed_libsql.go
+new file mode 100644
+index 0000000..5ba0fa5
+--- /dev/null
++++ b/v2/pkg/server/embed_libsql.go
+@@ -0,0 +1,12 @@
++//go:build embedlibsql
++
++package server
++
++import (
++	"github.com/glauth/glauth/v2/pkg/embed"
++	"github.com/glauth/glauth/v2/pkg/handler"
++)
++
++func NewEmbed(opts ...handler.Option) (handler.Handler, error) {
++	return embed.NewLibsqlHandler(opts...), nil
++}
+diff --git a/v2/pkg/server/embed_noembed.go b/v2/pkg/server/embed_noembed.go
+index fa98d36..61e116e 100644
+--- a/v2/pkg/server/embed_noembed.go
++++ b/v2/pkg/server/embed_noembed.go
+@@ -1,4 +1,4 @@
+-//go:build !(embedsqlite || embedmysql)
++//go:build !(embedsqlite || embedmysql || embedlibsql)
+ 
+ package server
+ 
