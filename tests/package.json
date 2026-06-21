@@ -1,0 +1,11 @@
+{
+  "name": "authelia-glauth-libsql-e2e",
+  "private": true,
+  "description": "Playwright browser test: log in to the Authelia portal (glauth user) over the real UI",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
