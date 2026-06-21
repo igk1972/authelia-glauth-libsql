@@ -1,0 +1,41 @@
+# mise configuration for the authelia + glauth + sqld (libsql) stack.
+# All tooling is installed natively via mise; there is no Docker in this stack.
+
+[tools]
+go = "1.23"
+caddy = "2.11.4"
+# sqld ships under the libsql-server-* release tags of the tursodatabase/libsql repo.
+"github:tursodatabase/libsql" = "libsql-server-v0.24.32"
+# Authelia web frontend build (Vite) + Playwright browser test.
+node = "24"
+pnpm = "11.8.0"
+
+[env]
+# --- Ports (all kept within the 10000-10100 range) ---
+PORT_CADDY = "10000"       # Caddy ingress: libsql clients hit http://localhost:10000/<namespace>
+SQLD_HTTP = "10001"        # sqld Hrana/HTTP listener
+SQLD_ADMIN = "10002"       # sqld admin API (namespace management)
+PORT_AUTHELIA = "10010"    # Authelia web portal
+PORT_GLAUTH_LDAP = "10020" # glauth LDAP listener
+
+# --- libsql Go driver ---
+# go-libsql (CGO, driver name "libsql"). Chosen by the spike: turso-go has NO
+# remote-to-sqld mode (its driver is local-only), while go-libsql talks to sqld
+# over Hrana and preserves the Caddy /<namespace> path prefix. Requires CGO_ENABLED=1.
+DRIVER = "libsql"
+
+# --- sqld namespaces (must match [a-z0-9_-]+ for the Caddy path router) ---
+NS_AUTHELIA = "authelia"
+NS_GLAUTH = "glauth"
+
+# --- Upstream source pins (cloned + patched by setup:sources) ---
+AUTHELIA_TAG = "v4.39.20"
+GLAUTH_TAG = "v2.4.0"
+
+# --- Paths ---
+BUILD_DIR = "{{config_root}}/.build"
+BIN_DIR = "{{config_root}}/.build/bin"
+
+[settings]
+# Required for the github: tool backend.
+experimental = true
