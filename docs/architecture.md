@@ -78,11 +78,18 @@ Values are exposed in `[env]` of `mise.toml` (`PORT_CADDY`, `SQLD_HTTP`, `SQLD_A
 mise.toml                  # tools + env (ports, namespaces, tags, paths)
 mise/tasks/**/*.sh         # file tasks (#MISE/#USAGE), subdir → group:name
 patches/{authelia,glauth}/ # patches only; sources are cloned into .build/ (gitignored)
-config/{authelia,glauth}/  # service configs
+config/{authelia,glauth}/  # service configs (authelia/secrets.env.example; secrets.env gitignored)
 deploy/caddy/Caddyfile     # path-namespace ingress
 deploy/authelia/tls/       # self-signed portal cert (gitignored)
 seed/glauth.sql            # test users/groups
 tests/                     # Playwright browser test
+.github/workflows/         # CI: native build -> ghcr images (buildah) + GitHub Release
 .build/                    # cloned+patched sources and binaries (gitignored)
 .run/                      # pid/log files + sqld data of running services (gitignored)
 ```
+
+## CI / Release
+
+`.github/workflows/release.yml` builds every target natively (no cross toolchain) and
+publishes two multi-arch images to ghcr.io via buildah (no Containerfile) plus the binaries
+to a GitHub Release. See [ci.md](ci.md).

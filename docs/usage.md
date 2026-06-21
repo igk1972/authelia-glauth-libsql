@@ -7,7 +7,7 @@ Everything runs natively through [mise](https://mise.jdx.dev). Task files live i
 
 ```sh
 mise run setup:tools     # install go, caddy, sqld, node, pnpm
-mise run setup:sources   # clone authelia@tag, glauth@tag and apply patches
+mise run setup:sources   # clone authelia@tag, glauth@tag, apply patches, regen keys.go
 mise run up              # cert + build (incl. frontend) + start the whole stack
 mise run verify          # SQL-level e2e
 mise run test:browser    # browser login through the real portal (Playwright)
@@ -20,7 +20,7 @@ mise run clean           # + remove binaries, pids and logs (--all: also sources
 | Task | What it does |
 |------|--------------|
 | `setup:tools` | `mise install` + print toolchain versions |
-| `setup:sources [--reset]` | clone Authelia/glauth at tags into `.build/` + apply patches |
+| `setup:sources [--reset]` | clone Authelia/glauth at tags into `.build/` (glauth without submodules) + apply patches + regenerate Authelia `keys.go` (authelia-gen) |
 | `setup:tls` | self-signed cert for `auth.example.com` into `deploy/authelia/tls/` |
 | `build:frontend` | build the Authelia web frontend (Vite) into `public_html` |
 | `build:glauth` | build glauth (`-tags embedlibsql`, CGO, `-s -w -trimpath`) |
@@ -38,6 +38,21 @@ mise run clean           # + remove binaries, pids and logs (--all: also sources
 
 Test glauth users (`seed/glauth.sql`), password is `password`: `john` (group `admins`),
 `jane` (group `users`).
+
+## Secrets
+
+Authelia's secrets — `session.secret`, `storage.encryption_key`,
+`identity_validation.reset_password.jwt_secret`, and the LDAP bind password — are **not** in
+`configuration.yml`. They live in `config/authelia/secrets.env` (gitignored) and are read by
+Authelia as `AUTHELIA_*` env vars. `run:authelia` and `migrate:authelia` load this file,
+creating it from `config/authelia/secrets.env.example` on first run, so the stack works out
+of the box locally. The placeholder values are for local use only — replace them before any
+real use.
+
+## CI / Release
+
+Tagged builds publish multi-arch images to ghcr.io and binaries to a GitHub Release via
+`.github/workflows/release.yml`. See [ci.md](ci.md).
 
 ## Verification
 

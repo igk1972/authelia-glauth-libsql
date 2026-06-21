@@ -23,6 +23,17 @@ mise run down            # stop the stack
 Test users (`seed/glauth.sql`), password is `password`: `john` (admins), `jane` (users).
 Portal: `https://auth.example.com:10010` (self-signed TLS cert, see docs).
 
+Secrets live in `config/authelia/secrets.env` (gitignored, auto-created from
+`secrets.env.example`) — replace the placeholders before any real use.
+
+## Prebuilt images & releases
+
+Tagged builds (`v*`) publish, via [GitHub Actions](docs/ci.md):
+
+- multi-arch images (linux amd64+arm64): `ghcr.io/igk1972/authelia:4.39.20-libsql`,
+  `ghcr.io/igk1972/glauth:2.4.0-libsql`;
+- binaries (linux amd64/arm64, darwin arm64) attached to each GitHub Release.
+
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — components, ports, data flow, the
@@ -35,3 +46,4 @@ Portal: `https://auth.example.com:10010` (self-signed TLS cert, see docs).
 - [docs/usage.md](docs/usage.md) — mise task reference, lifecycle, verification
   (SQL/browser/manual).
 - [docs/limitations.md](docs/limitations.md) — deliberate limitations.
+- [docs/ci.md](docs/ci.md) — GitHub Actions: multi-arch ghcr images (buildah) + binary releases.

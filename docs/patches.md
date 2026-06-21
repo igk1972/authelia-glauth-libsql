@@ -20,13 +20,17 @@ already-applied patches are skipped).
 Build: `go build -tags embedlibsql` (CGO). Config: `datastore = "embed"`,
 `database = "http://localhost:10000/glauth"`, `anonymousdse = true`.
 
+glauth is cloned **without submodules**: its plugin submodules (`glauth-{sqlite,mysql,
+postgres,pam}`) use SSH URLs and are unused by the `embedlibsql` build (`go.work` uses only
+`./v2`, and the main module neither requires nor imports them), so `setup:sources` skips
+them — CI runners have no SSH key to `git@github.com`.
+
 ## Authelia — `patches/authelia/0001-libsql-storage-and-sessions.patch`
 
 ### libsql storage backend
 
 - `internal/configuration/schema/storage.go` — `StorageLibSQL{URL, AuthToken}` + a field on `Storage`.
 - `internal/configuration/validator/storage.go` — `validateLibSQLConfiguration` branch + inclusion in the "exactly one backend" count.
-- `internal/configuration/schema/keys.go` — `storage.libsql.*` keys added (the list is generated; extended by hand).
 - `internal/storage/const.go` — `providerLibSQL = "libsql"`.
 - `internal/storage/sql_provider_backend_libsql.go` — `NewLibSQLProvider`: a wrapper over
   `NewSQLProvider(config, providerLibSQL, "libsql", dsn)` reusing the SQLite dialect,
@@ -47,10 +51,18 @@ Build: `go build -tags embedlibsql` (CGO). Config: `datastore = "embed"`,
   `[]byte`.
 - `internal/configuration/schema/session.go` — `SessionLibSQL{URL, AuthToken, Table}` + a field on `Session`.
 - `internal/configuration/validator/session.go` — validation (url required, default table).
-- `internal/configuration/schema/keys.go` — `session.libsql.*` keys.
 - `internal/session/provider_config.go` — `case config.LibSQL != nil` branch in
   `NewSessionProvider` with a **mandatory** `NewEncryptingSerializer(config.Secret)`
   (sessions are AES-GCM-encrypted before storage).
+
+### Generated config keys (`keys.go`)
+
+`internal/configuration/schema/keys.go` (the list of valid configuration keys) is a
+**generated** file: `authelia-gen` builds it via reflection over the config struct koanf
+tags. Rather than patching it by hand, `setup:sources` regenerates it after applying the
+patches (`go run ./cmd/authelia-gen code keys`) — the patch adds the `LibSQL` struct fields,
+and the generator then emits the matching `storage.libsql.*` / `session.libsql.*` keys. This
+keeps the patch robust across Authelia upgrades.
 
 ## Authelia web frontend (outside the patches)
 
