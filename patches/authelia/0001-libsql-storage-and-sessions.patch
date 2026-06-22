@@ -403,7 +403,7 @@ index 0000000..8ee796c
 +++ b/internal/storage/migrations/libsql/V0001.Initial_Schema.up.sql
 @@ -0,0 +1,380 @@
 +-- libSQL squashed initial schema (equivalent to sqlite migrations V0001..V0024 at authelia v4.39.20).
-+-- Fresh-install only: this PoC does not replay the historical sqlite migrations (UDF/PRAGMA/rebuilds).
++-- Fresh-install only: the historical sqlite migrations (UDF/PRAGMA/table rebuilds) are not replayed.
 +CREATE TABLE identity_verification (
 +    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 +    jti VARCHAR(36),
