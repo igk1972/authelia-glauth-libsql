@@ -6,8 +6,10 @@ Below are the deliberate simplifications and their reasons.
   Authelia's sqlite migrations (Go UDFs `BIN2B64`, `PRAGMA foreign_keys` toggling, table
   rebuilds) is not replayed. Upgrading an existing database is not supported.
 - **sqld without authentication.** Runs on trusted localhost with no JWT
-  (`--auth-jwt-key`). For production: Ed25519 JWT + `auth_token` in the DSN (the
-  `*.libsql.auth_token` config fields are already provided).
+  (`--auth-jwt-key`). For production: enable an Ed25519 JWT on sqld and present a token from
+  each client — Authelia via the `storage.libsql.auth_token` / `session.libsql.auth_token`
+  config fields, glauth via the `GLAUTH_LIBSQL_AUTH_TOKEN` env var (appended to the DSN as
+  `authToken=`). Both paths are already wired.
 - **Sessions without Redis.** Authelia sessions are persisted in libsql (rather than
   in-memory/Redis), which was the goal; Redis HA scenarios were not considered.
 - **Placeholder secrets and self-signed TLS.** Authelia's secrets live in

@@ -14,7 +14,9 @@ already-applied patches are skipped).
   `embed_noembed.go` (adds `embedlibsql` to the excluding build constraint).
 - `v2/pkg/plugins/basesqlhandler.go` — for the `libsql` driver, open via plain
   `database/sql` (bypassing `otelsql`, which is incompatible with go-libsql) + pool tuning
-  (`ConnMaxIdleTime`/`ConnMaxLifetime`).
+  (`ConnMaxIdleTime`/`ConnMaxLifetime`); the libsql auth token is read from the
+  `GLAUTH_LIBSQL_AUTH_TOKEN` env var and appended to the DSN as `authToken=` (kept out of
+  `glauth.cfg`, mirroring Authelia's `*.libsql.auth_token`).
 - `go.mod`/`go.sum` — the `github.com/tursodatabase/go-libsql` dependency.
 
 Build: `go build -tags embedlibsql` (CGO). Config: `datastore = "embed"`,

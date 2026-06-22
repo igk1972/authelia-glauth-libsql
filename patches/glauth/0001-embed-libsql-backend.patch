@@ -163,7 +163,7 @@ index 0000000..dd411af
 +	}
 +}
 diff --git a/v2/pkg/plugins/basesqlhandler.go b/v2/pkg/plugins/basesqlhandler.go
-index ceb517b..ce473a9 100644
+index ceb517b..6b1341c 100644
 --- a/v2/pkg/plugins/basesqlhandler.go
 +++ b/v2/pkg/plugins/basesqlhandler.go
 @@ -12,6 +12,7 @@ import (
@@ -174,7 +174,7 @@ index ceb517b..ce473a9 100644
  
  	"github.com/rs/zerolog"
  	"github.com/uptrace/opentelemetry-go-extra/otelsql"
-@@ -62,12 +63,27 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.H
+@@ -62,12 +63,40 @@ func NewDatabaseHandler(sqlBackend SqlBackend, opts ...handler.Option) handler.H
  	options := handler.NewOptions(opts...)
  
  	// Note: we will never terminate this connection pool.
@@ -190,7 +190,20 @@ index ceb517b..ce473a9 100644
 +		// go-libsql returns driver.ErrSkip from some fast paths, which the otelsql
 +		// wrapper (v0.2.3) surfaces as a fatal Ping error. Use the plain
 +		// database/sql opener for libsql (DB-layer OTEL tracing is not needed here).
-+		db, err = sql.Open(sqlBackend.GetDriverName(), options.Backend.Database)
++		//
++		// The libsql auth token (JWT) for a secured/remote sqld is read from the
++		// GLAUTH_LIBSQL_AUTH_TOKEN environment variable, so it never has to be written
++		// in plaintext into glauth.cfg. It is appended to the DSN as the authToken
++		// query parameter (go-libsql reads the token from there).
++		dsn := options.Backend.Database
++		if token := os.Getenv("GLAUTH_LIBSQL_AUTH_TOKEN"); token != "" && !strings.Contains(dsn, "authToken=") {
++			sep := "?"
++			if strings.Contains(dsn, "?") {
++				sep = "&"
++			}
++			dsn = fmt.Sprintf("%s%sauthToken=%s", dsn, sep, token)
++		}
++		db, err = sql.Open(sqlBackend.GetDriverName(), dsn)
 +		if err == nil {
 +			// Remote sqld expires idle Hrana streams (STREAM_EXPIRED). Recycle idle
 +			// connections well before that so we never reuse an expired stream.
