@@ -27,3 +27,8 @@ Below are the deliberate simplifications and their reasons.
   backend via go-libsql are downstream changes, not intended for upstream as-is.
 - **Binary size.** ~47–58 MB due to the embedded native libsql (+ the web frontend for
   Authelia); it cannot be made smaller without breaking CGO linkage.
+- **Group-based access control untested by default.** The example policy is `one_factor` with no
+  group rules, so Authelia's group resolution is never exercised. glauth presents groups as
+  `objectClass=groupOfUniqueNames` (membership via `uniqueMember=<user DN>`), so the
+  `authentication_backend.ldap.groups_filter` must match that objectClass — otherwise group rules
+  silently resolve to no groups and deny with 403. (Fixed in `config/authelia/configuration.yml`.)
