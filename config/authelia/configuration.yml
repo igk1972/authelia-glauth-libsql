@@ -32,9 +32,14 @@ authentication_backend:
     address: 'ldap://127.0.0.1:10020'
     base_dn: 'dc=glauth,dc=com'
     additional_users_dn: 'ou=users'
-    users_filter: '(&({username_attribute}={input})(objectClass=posixAccount))'
+    # Match by username (cn) OR email, so users can sign in with either.
+    users_filter: '(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=posixAccount))'
     additional_groups_dn: 'ou=groups'
-    groups_filter: '(&(uniqueMember={dn})(objectClass=posixGroup))'
+    # glauth presents groups as objectClass=groupOfUniqueNames (membership via uniqueMember=<user DN>),
+    # NOT posixGroup. With the wrong objectClass the group search returns nothing, so Authelia sees no
+    # groups and any group-based access_control rule denies with 403. The one_factor default policy
+    # below never exercised this, which is why it long went unnoticed.
+    groups_filter: '(&(uniqueMember={dn})(objectClass=groupOfUniqueNames))'
     username_attribute: 'cn'
     mail_attribute: 'mail'
     display_name_attribute: 'givenName'
