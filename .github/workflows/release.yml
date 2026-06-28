@@ -81,7 +81,8 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-      # Container images: linux only (distroless base-debian13, glibc >= runner's 2.39).
+      # Container images: linux only (distroless cc-debian13: glibc >= runner's 2.39 plus
+      # libgcc_s.so.1 / libstdc++, which the CGO go-libsql binaries load at runtime).
       - name: Build and push per-arch images (buildah, no Containerfile)
         if: matrix.os == 'linux'
         env:
@@ -101,7 +102,7 @@ jobs:
           # build_image <component> <version> <bin-path> <cmd-json>
           build_image() {
             local comp="$1" ver="$2" bin="$3" cmd="$4" ctr img
-            ctr=$(buildah from gcr.io/distroless/base-debian13:latest)
+            ctr=$(buildah from gcr.io/distroless/cc-debian13:latest)
             buildah copy "$ctr" "$bin" "/usr/bin/$comp"
             buildah config \
               --entrypoint "[\"/usr/bin/$comp\"]" \
