@@ -42,7 +42,8 @@ go-libsql prebuilt (see [limitations.md](limitations.md)).
 ## Images (ghcr.io)
 
 Tagged with the **upstream** version + `-libsql` (no `latest`); the base image is
-`gcr.io/distroless/base-debian13` (glibc ≥ the build runner's, no shell). Config is mounted
+`gcr.io/distroless/cc-debian13` (glibc ≥ the build runner's, plus `libgcc_s.so.1` /
+`libstdc++` — the CGO go-libsql binaries load these at runtime; no shell). Config is mounted
 at runtime, not baked in.
 
 - `ghcr.io/<owner>/authelia:<authelia-version>-libsql` (e.g. `4.39.20-libsql`)
