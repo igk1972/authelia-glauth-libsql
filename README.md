@@ -39,10 +39,10 @@ Tagged builds (`v*`) publish, via [GitHub Actions](docs/ci.md):
 - [docs/architecture.md](docs/architecture.md) — components, ports, data flow, the
   Caddy+namespaces trick, pinned versions, repository layout.
 - [docs/driver-and-gotchas.md](docs/driver-and-gotchas.md) — why go-libsql, the gotchas
-  (multi-statement, `STREAM_EXPIRED`, otelsql, symbol clash, Root DSE), binary size
-  optimization.
-- [docs/patches.md](docs/patches.md) — exactly what is patched in Authelia and glauth, the
-  frontend build, idempotency.
+  (multi-statement, `STREAM_EXPIRED`, otelsql, symbol clash, Root DSE, poisoned Hrana
+  streams), binary size optimization.
+- [docs/patches.md](docs/patches.md) — exactly what is patched in Authelia, glauth and
+  go-libsql, the frontend build, idempotency.
 - [docs/usage.md](docs/usage.md) — mise task reference, lifecycle, verification
   (SQL/browser/manual).
 - [docs/limitations.md](docs/limitations.md) — deliberate limitations.

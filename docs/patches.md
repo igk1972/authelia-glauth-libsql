@@ -27,6 +27,31 @@ postgres,pam}`) use SSH URLs and are unused by the `embedlibsql` build (`go.work
 `./v2`, and the main module neither requires nor imports them), so `setup:sources` skips
 them — CI runners have no SSH key to `git@github.com`.
 
+## glauth — `patches/glauth/0002-propagate-database-errors.patch`
+
+`v2/pkg/plugins/basesqlhandler.go`: database errors no longer turn into empty results.
+
+- `FindPosixAccounts`, `memoizeGroups`, `getGroupMemberDNs`, `getGroupMemberIDs` check
+  `rows.Err()` after the row loop; the member lookups (and `getGroup`) return errors instead
+  of an empty member list, and `FindPosixGroups` passes them on.
+- `FindUser` closes the capabilities rows only when the query succeeded (it deferred `Close`
+  on a nil `*sql.Rows`, which panicked), treats a failed capabilities read as "not found"
+  (callers ignore the error) and logs database errors.
+
+## go-libsql — `patches/go-libsql/0001-drop-broken-hrana-streams-from-the-pool.patch`
+
+`setup:sources` copies `github.com/tursodatabase/go-libsql` from the Go module cache at the
+version both patched modules require (it ships the prebuilt static libsql, so it is not
+cloned), applies the patch in `.build/go-libsql`, and points both modules at it with
+`go mod edit -replace`. The prebuilt archives are unchanged.
+
+- `conn_health.go` — classifies remote errors (refused before execution / transport /
+  statement), implements `driver.Validator` and `driver.SessionResetter`, and returns
+  `driver.ErrBadConn` where repeating the request is safe; see
+  [driver-and-gotchas.md](driver-and-gotchas.md) §7.
+- `libsql.go` — `ExecContext`, `QueryContext` and `rows.Next` pass errors through it.
+- `conn_health_test.go` — unit tests for the classification.
+
 ## Authelia — `patches/authelia/0001-libsql-storage-and-sessions.patch`
 
 ### libsql storage backend

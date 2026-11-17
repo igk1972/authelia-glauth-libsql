@@ -64,6 +64,34 @@ for AES-GCM ciphertext. Our `session/libsql` binds `data` as `[]byte` (a `BLOB` 
 Before binding, Authelia performs an anonymous Root DSE search; glauth rejects it by default
 and closes the connection. The glauth config enables `anonymousdse = true`.
 
+### 7. A lost response poisons the Hrana stream (`Received a baton that has already been used`)
+
+sqld advances a stream's baton sequence as soon as it accepts a request, before the response
+is sent; the client stores the new baton only after reading it from the response. When a
+response is cut on the wire (seen on `/v3/cursor` behind Caddy while another pooled
+connection runs queries), the client keeps the old baton and every later request on that
+connection is refused with HTTP 400 until the pool retires it. sqld logs `Expected baton seq N, received N-1`, Authelia
+logs `user not found` / `Unable to save updated user session`, and after three such
+failures regulation bans the user.
+
+go-libsql neither reports such connections as bad nor retries, so
+`patches/go-libsql/0001-drop-broken-hrana-streams-from-the-pool.patch` makes the driver:
+
+- implement `driver.Validator` / `driver.SessionResetter`, so a connection that hit a
+  stream or transport error is closed instead of returned to the pool;
+- return `driver.ErrBadConn` (database/sql retries on a fresh connection) when sqld refused
+  the request while acquiring the stream — reused/invalid/closed baton, `STREAM_EXPIRED`,
+  429 on opening the connection — since nothing was executed;
+- return `driver.ErrBadConn` for a transport failure only on a plain `SELECT`; writes keep
+  the original error, as they may have run.
+
+Each cut response still leaves one `Expected baton seq` line in the sqld log: the dropped
+connection closes its stream with the stale baton.
+
+glauth's SQL backend also ignored `rows.Err()`, so a cut cursor looked like the end of the
+table and a lookup returned no user or no group members;
+`patches/glauth/0002-propagate-database-errors.patch` returns those errors instead.
+
 ## Binary size optimization
 
 Builds use `-trimpath -ldflags="-s -w"` (DWARF and the Go symbol table removed, local paths
