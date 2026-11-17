@@ -21,7 +21,7 @@ The build is **native per target** (`CGO_ENABLED=1`; go-libsql links a prebuilt 
 |--------|--------|
 | `linux/amd64`  | `ubuntu-24.04` |
 | `linux/arm64`  | `ubuntu-24.04-arm` |
-| `darwin/arm64` | `macos-14` |
+| `darwin/arm64` | `macos-15` |
 
 Lightweight jobs (`meta` / `manifest` / `release`) run on `ubuntu-slim`. Container images are
 **linux only** (amd64 + arm64); macOS produces a binary only — `darwin/amd64` has no
