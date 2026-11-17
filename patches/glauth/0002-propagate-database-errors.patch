@@ -1,0 +1,215 @@
+diff --git a/v2/pkg/plugins/basesqlhandler.go b/v2/pkg/plugins/basesqlhandler.go
+index 6b1341c..5eeb7fe 100644
+--- a/v2/pkg/plugins/basesqlhandler.go
++++ b/v2/pkg/plugins/basesqlhandler.go
+@@ -235,7 +235,8 @@ func (h databaseHandler) FindUser(ctx context.Context, userName string, searchBy
+ 
+ 			if !h.cfg.Behaviors.IgnoreCapabilities {
+ 				capability := config.Capability{}
+-				rows, err := h.database.cnx.QueryContext(ctx, fmt.Sprintf(`
++				var rows *sql.Rows
++				rows, err = h.database.cnx.QueryContext(ctx, fmt.Sprintf(`
+ 				SELECT c.action,c.object
+ 				FROM capabilities c WHERE userid=%s`,
+ 					h.sqlBackend.GetPrepareSymbol()), user.UIDNumber)
+@@ -246,11 +247,19 @@ func (h databaseHandler) FindUser(ctx context.Context, userName string, searchBy
+ 							user.Capabilities = append(user.Capabilities, capability)
+ 						}
+ 					}
++					err = rows.Err()
++					rows.Close()
++				}
++				if err != nil {
++					// Callers ignore the error, so a user with unreadable capabilities must not be found.
++					found = false
+ 				}
+-				defer rows.Close()
+ 			}
+ 		}
+ 	}
++	if err != nil && !errors.Is(err, sql.ErrNoRows) {
++		h.log.Error().Err(err).Str("username", userName).Msg("FindUser: database error")
++	}
+ 
+ 	return found, user, err
+ }
+@@ -338,6 +347,9 @@ func (h databaseHandler) FindPosixAccounts(ctx context.Context, hierarchy string
+ 
+ 		entries = append(entries, entry)
+ 	}
++	if err := rows.Err(); err != nil {
++		return entries, err
++	}
+ 
+ 	return entries, nil
+ }
+@@ -354,7 +366,10 @@ func (h databaseHandler) FindPosixGroups(ctx context.Context, hierarchy string)
+ 	}
+ 
+ 	for _, g := range h.MemGroups {
+-		info := h.getGroup(ctx, hierarchy, g)
++		info, err := h.getGroup(ctx, hierarchy, g)
++		if err != nil {
++			return entries, err
++		}
+ 		if hierarchy != "groups" {
+ 			info.DN = strings.Replace(info.DN, ",ou=groups,", fmt.Sprintf(",%s,", hierarchy), 1)
+ 		}
+@@ -445,6 +460,9 @@ func (h databaseHandler) memoizeGroups(ctx context.Context) ([]config.Group, err
+ 			pg.IncludeGroups = append(pg.IncludeGroups, int(includeId.Int64))
+ 		}
+ 	}
++	if err := rows.Err(); err != nil {
++		return nil, fmt.Errorf("Unable to memoize groups list: %w", err)
++	}
+ 	memGroups := make([]config.Group, len(workMemGroups))
+ 	for i, v := range workMemGroups {
+ 		memGroups[i] = config.Group{Name: v.Name, GIDNumber: v.GIDNumber, IncludeGroups: v.IncludeGroups}
+@@ -452,7 +470,7 @@ func (h databaseHandler) memoizeGroups(ctx context.Context) ([]config.Group, err
+ 	return memGroups, nil
+ }
+ 
+-func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) []string {
++func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) ([]string, error) {
+ 	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.getGroupMemberDNs")
+ 	defer span.End()
+ 
+@@ -470,8 +488,7 @@ func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) []strin
+ 			SELECT u.name,u.uidnumber,u.primarygroup,u.passbcrypt,u.passsha256,u.otpsecret,u.yubikey,u.othergroups
+ 			FROM users u`)
+ 	if err != nil {
+-		// Silent fail... for now
+-		return []string{}
++		return nil, err
+ 	}
+ 	defer rows.Close()
+ 
+@@ -480,7 +497,7 @@ func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) []strin
+ 	for rows.Next() {
+ 		err := rows.Scan(&u.Name, &u.UIDNumber, &u.PrimaryGroup, &u.PassBcrypt, &u.PassSHA256, &u.OTPSecret, &u.Yubikey, &otherGroups)
+ 		if err != nil {
+-			return []string{}
++			return nil, err
+ 		}
+ 		if u.PrimaryGroup == gid {
+ 			dn := fmt.Sprintf("%s=%s,%s=%s%s,%s", h.backend.NameFormatAsArray[0], u.Name, h.backend.GroupFormatAsArray[0], h.getGroupName(ctx, u.PrimaryGroup), insertOuUsers, h.backend.BaseDN)
+@@ -496,11 +513,18 @@ func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) []strin
+ 		}
+ 	}
+ 
++	if err := rows.Err(); err != nil {
++		return nil, err
++	}
++
+ 	for _, g := range h.MemGroups {
+ 		if gid == g.GIDNumber {
+ 			for _, includegroupid := range g.IncludeGroups {
+ 				if includegroupid != gid {
+-					includegroupmembers := h.getGroupMemberDNs(ctx, includegroupid)
++					includegroupmembers, err := h.getGroupMemberDNs(ctx, includegroupid)
++					if err != nil {
++						return nil, err
++					}
+ 
+ 					for _, includegroupmember := range includegroupmembers {
+ 						members[includegroupmember] = true
+@@ -517,11 +541,11 @@ func (h databaseHandler) getGroupMemberDNs(ctx context.Context, gid int) []strin
+ 
+ 	sort.Strings(m)
+ 
+-	return m
++	return m, nil
+ }
+ 
+ // Used exclusively when looking up Posix Groups
+-func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) []string {
++func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) ([]string, error) {
+ 	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.getGroupMemberIDs")
+ 	defer span.End()
+ 
+@@ -532,8 +556,7 @@ func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) []strin
+ 			SELECT u.name,u.uidnumber,u.primarygroup,u.passbcrypt,u.passsha256,u.otpsecret,u.yubikey,u.othergroups
+ 			FROM users u`)
+ 	if err != nil {
+-		// Silent fail... for now
+-		return []string{}
++		return nil, err
+ 	}
+ 	defer rows.Close()
+ 
+@@ -542,7 +565,7 @@ func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) []strin
+ 	for rows.Next() {
+ 		err := rows.Scan(&u.Name, &u.UIDNumber, &u.PrimaryGroup, &u.PassBcrypt, &u.PassSHA256, &u.OTPSecret, &u.Yubikey, &otherGroups)
+ 		if err != nil {
+-			return []string{}
++			return nil, err
+ 		}
+ 		if u.PrimaryGroup == gid {
+ 			members[u.Name] = true
+@@ -556,13 +579,20 @@ func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) []strin
+ 		}
+ 	}
+ 
++	if err := rows.Err(); err != nil {
++		return nil, err
++	}
++
+ 	for _, g := range h.MemGroups {
+ 		if gid == g.GIDNumber {
+ 			for _, includegroupid := range g.IncludeGroups {
+ 				if includegroupid == gid {
+ 					h.log.Warn().Msg(fmt.Sprintf("Group: %d - Ignoring myself as included group", includegroupid))
+ 				} else {
+-					includegroupmemberids := h.getGroupMemberIDs(ctx, includegroupid)
++					includegroupmemberids, err := h.getGroupMemberIDs(ctx, includegroupid)
++					if err != nil {
++						return nil, err
++					}
+ 
+ 					for _, includegroupmemberid := range includegroupmemberids {
+ 						members[includegroupmemberid] = true
+@@ -579,7 +609,7 @@ func (h databaseHandler) getGroupMemberIDs(ctx context.Context, gid int) []strin
+ 
+ 	sort.Strings(m)
+ 
+-	return m
++	return m, nil
+ }
+ 
+ // Invoked for every user being returned from our database
+@@ -631,7 +661,7 @@ func (h databaseHandler) getGroupName(ctx context.Context, gid int) string {
+ }
+ 
+ // Toolbox
+-func (h databaseHandler) getGroup(ctx context.Context, hierarchy string, g config.Group) *ldap.Entry {
++func (h databaseHandler) getGroup(ctx context.Context, hierarchy string, g config.Group) (*ldap.Entry, error) {
+ 	ctx, span := h.tracer.Start(ctx, "plugins.databaseHandler.getGroup")
+ 	defer span.End()
+ 
+@@ -643,15 +673,23 @@ func (h databaseHandler) getGroup(ctx context.Context, hierarchy string, g confi
+ 	}
+ 	attrs = append(attrs, &ldap.EntryAttribute{Name: "description", Values: []string{fmt.Sprintf("%s via LDAP", g.Name)}})
+ 	attrs = append(attrs, &ldap.EntryAttribute{Name: "gidNumber", Values: []string{fmt.Sprintf("%d", g.GIDNumber)}})
+-	attrs = append(attrs, &ldap.EntryAttribute{Name: "uniqueMember", Values: h.getGroupMemberDNs(ctx, g.GIDNumber)})
++	memberDNs, err := h.getGroupMemberDNs(ctx, g.GIDNumber)
++	if err != nil {
++		return nil, err
++	}
++	attrs = append(attrs, &ldap.EntryAttribute{Name: "uniqueMember", Values: memberDNs})
+ 	if asGroupOfUniqueNames {
+ 		attrs = append(attrs, &ldap.EntryAttribute{Name: "objectClass", Values: []string{"groupOfUniqueNames", "top"}})
+ 	} else {
+-		attrs = append(attrs, &ldap.EntryAttribute{Name: "memberUid", Values: h.getGroupMemberIDs(ctx, g.GIDNumber)})
++		memberIDs, err := h.getGroupMemberIDs(ctx, g.GIDNumber)
++		if err != nil {
++			return nil, err
++		}
++		attrs = append(attrs, &ldap.EntryAttribute{Name: "memberUid", Values: memberIDs})
+ 		attrs = append(attrs, &ldap.EntryAttribute{Name: "objectClass", Values: []string{"posixGroup", "top"}})
+ 	}
+ 	dn := fmt.Sprintf("%s=%s,ou=groups,%s", h.backend.GroupFormatAsArray[0], g.Name, h.backend.BaseDN)
+-	return &ldap.Entry{DN: dn, Attributes: attrs}
++	return &ldap.Entry{DN: dn, Attributes: attrs}, nil
+ }
+ 
+ func (h databaseHandler) getAccount(ctx context.Context, hierarchy string, u config.User) *ldap.Entry {
