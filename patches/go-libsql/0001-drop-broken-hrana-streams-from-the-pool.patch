@@ -1,0 +1,308 @@
+diff --git a/conn_health.go b/conn_health.go
+new file mode 100644
+index 0000000..c19aa92
+--- /dev/null
++++ b/conn_health.go
+@@ -0,0 +1,132 @@
++//go:build cgo
++// +build cgo
++
++package libsql
++
++import (
++	"context"
++	sqldriver "database/sql/driver"
++	"fmt"
++	"strings"
++)
++
++// A remote connection is a single Hrana stream, addressed by a baton that sqld
++// rotates on every request. When a response is lost on the wire the server has
++// already rotated the baton but the client never learns the new one, so every
++// later request on the stream is refused. database/sql keeps reusing such a
++// connection unless the driver reports it as bad.
++
++type errorKind int
++
++const (
++	// errKindStatement is an ordinary statement error; the stream stays usable.
++	errKindStatement errorKind = iota
++	// errKindRejected means sqld refused the request while acquiring the stream,
++	// before executing anything, so repeating it on a new stream is safe.
++	errKindRejected
++	// errKindTransport means the request may or may not have been executed and
++	// the stream state is unknown.
++	errKindTransport
++)
++
++var rejectedMarkers = []string{
++	"Received a baton that has already been used",
++	"Received an invalid baton",
++	"Stream for this baton was closed",
++	"The stream has expired due to inactivity",
++	// Returned while opening the database connection for a new stream.
++	"status=429 Too Many Requests",
++}
++
++// Statement errors from a batch are also reported as "api error", but without
++// an HTTP status, so only the status form marks a failed HTTP exchange.
++var transportMarkers = []string{
++	"Hrana: `http error:",
++	"Hrana: `api error: `status=",
++	"Hrana: `json error:",
++	"Hrana: `unexpected response:",
++	"Hrana: `stream closed:",
++	"Hrana: `cursor error:",
++}
++
++func classifyError(msg string) errorKind {
++	for _, m := range rejectedMarkers {
++		if strings.Contains(msg, m) {
++			return errKindRejected
++		}
++	}
++	// A step error inside a cursor is a statement error reported by the server.
++	if strings.Contains(msg, "Hrana: `cursor error: `error at step") {
++		return errKindStatement
++	}
++	for _, m := range transportMarkers {
++		if strings.Contains(msg, m) {
++			return errKindTransport
++		}
++	}
++	return errKindStatement
++}
++
++// checkError marks the connection broken when err leaves the stream unusable and
++// returns driver.ErrBadConn when database/sql may safely repeat the request on
++// another connection. retryable says whether a transport failure is safe to
++// repeat, which holds only for statements without side effects.
++func (c *conn) checkError(err error, retryable bool) error {
++	switch classifyError(err.Error()) {
++	case errKindRejected:
++		c.broken.Store(true)
++		return fmt.Errorf("%w: %v", sqldriver.ErrBadConn, err)
++	case errKindTransport:
++		c.broken.Store(true)
++		if retryable {
++			return fmt.Errorf("%w: %v", sqldriver.ErrBadConn, err)
++		}
++	}
++	return err
++}
++
++// IsValid implements driver.Validator: database/sql closes the connection
++// instead of returning it to the pool.
++func (c *conn) IsValid() bool {
++	return !c.broken.Load()
++}
++
++// ResetSession implements driver.SessionResetter.
++func (c *conn) ResetSession(ctx context.Context) error {
++	if c.broken.Load() {
++		return sqldriver.ErrBadConn
++	}
++	return nil
++}
++
++// isReadOnlyQuery reports whether query is a plain SELECT, which can be
++// repeated after a transport failure without side effects.
++func isReadOnlyQuery(query string) bool {
++	q := query
++	for {
++		q = strings.TrimLeft(q, " \t\r\n")
++		switch {
++		case strings.HasPrefix(q, "--"):
++			i := strings.IndexByte(q, '\n')
++			if i < 0 {
++				return false
++			}
++			q = q[i+1:]
++		case strings.HasPrefix(q, "/*"):
++			i := strings.Index(q, "*/")
++			if i < 0 {
++				return false
++			}
++			q = q[i+2:]
++		default:
++			if len(q) < 6 || !strings.EqualFold(q[:6], "SELECT") {
++				return false
++			}
++			if len(q) == 6 {
++				return true
++			}
++			next := q[6]
++			return !(next == '_' || next >= '0' && next <= '9' || next >= 'a' && next <= 'z' || next >= 'A' && next <= 'Z')
++		}
++	}
++}
+diff --git a/conn_health_test.go b/conn_health_test.go
+new file mode 100644
+index 0000000..9499966
+--- /dev/null
++++ b/conn_health_test.go
+@@ -0,0 +1,91 @@
++//go:build cgo
++// +build cgo
++
++package libsql
++
++import (
++	sqldriver "database/sql/driver"
++	"errors"
++	"testing"
++)
++
++func TestClassifyError(t *testing.T) {
++	cases := []struct {
++		msg  string
++		want errorKind
++	}{
++		{"failed to prepare query SELECT data FROM session WHERE id=?\nerror code = 3: Error preparing statement: Hrana: `api error: `status=400 Bad Request, body=Received a baton that has already been used``", errKindRejected},
++		{"failed to execute query X\nerror code = 1: Error executing statement: Hrana: `api error: `status=400 Bad Request, body={\"message\":\"The stream has expired due to inactivity\",\"code\":\"STREAM_EXPIRED\"}``", errKindRejected},
++		{"error code = 3: Error preparing statement: Hrana: `api error: `status=400 Bad Request, body=Received an invalid baton``", errKindRejected},
++		{"error code = 3: Error preparing statement: Hrana: `api error: `status=400 Bad Request, body=Stream for this baton was closed``", errKindRejected},
++		{"error code = 3: Error preparing statement: Hrana: `api error: `status=429 Too Many Requests, body={\"error\":\"Timed out while opening database connection\"}``", errKindRejected},
++		{"failed to execute query SELECT data FROM session WHERE id=?\nerror code = 1: Error executing statement: Hrana: `cursor error: `error reading a body from connection: unexpected EOF during chunk size line``", errKindTransport},
++		{"error code = 1: Error executing statement: Hrana: `http error: `hyper::Error(IncompleteMessage)``", errKindTransport},
++		{"error code = 1: Error executing statement: Hrana: `api error: `status=502 Bad Gateway, body=``", errKindTransport},
++		{"error code = 1: Error executing statement: Hrana: `cursor error: `cursor stream ended prematurely``", errKindTransport},
++		{"error code = 1: Error executing statement: Hrana: `json error: `EOF while parsing a value at line 1 column 0``", errKindTransport},
++		{"error code = 2: Error executing statement: Hrana: `stream error: `Error { message: \"SQLite error: database is locked\", code: \"SQLITE_BUSY\" }``", errKindStatement},
++		{"error code = 2: Error executing statement: Hrana: `api error: `SQLite error: UNIQUE constraint failed: users.name``", errKindStatement},
++		{"error code = 1: Error executing statement: Hrana: `cursor error: `error at step 0: SQLite error: no such table: x``", errKindStatement},
++		{"only one statement is supported got 2", errKindStatement},
++	}
++	for _, c := range cases {
++		if got := classifyError(c.msg); got != c.want {
++			t.Errorf("classifyError(%q) = %d, want %d", c.msg, got, c.want)
++		}
++	}
++}
++
++func TestIsReadOnlyQuery(t *testing.T) {
++	cases := map[string]bool{
++		"SELECT data FROM session WHERE id=?":  true,
++		"\n\t\tSELECT u.name FROM users u":     true,
++		"select 1":                             true,
++		"SELECT":                               true,
++		"-- comment\nSELECT 1":                 true,
++		"/* c */ SELECT 1":                     true,
++		"SELECTED":                             false,
++		"SELECT_x":                             false,
++		"INSERT INTO session (id) VALUES (?)":  false,
++		"WITH x AS (SELECT 1) DELETE FROM t":   false,
++		"UPDATE session SET data=? WHERE id=?": false,
++		"BEGIN":                                false,
++		"-- unterminated":                      false,
++		"/* unterminated":                      false,
++		"":                                     false,
++	}
++	for q, want := range cases {
++		if got := isReadOnlyQuery(q); got != want {
++			t.Errorf("isReadOnlyQuery(%q) = %v, want %v", q, got, want)
++		}
++	}
++}
++
++func TestCheckError(t *testing.T) {
++	rejected := errors.New("Hrana: `api error: `status=400 Bad Request, body=Received a baton that has already been used``")
++	transport := errors.New("Hrana: `cursor error: `error reading a body from connection: unexpected EOF during chunk size line``")
++	statement := errors.New("Hrana: `stream error: `Error { message: \"SQLite error: database is locked\" }``")
++
++	c := &conn{}
++	if err := c.checkError(statement, true); errors.Is(err, sqldriver.ErrBadConn) || !c.IsValid() {
++		t.Fatalf("statement error must keep the connection: err=%v valid=%v", err, c.IsValid())
++	}
++
++	c = &conn{}
++	if err := c.checkError(rejected, false); !errors.Is(err, sqldriver.ErrBadConn) || c.IsValid() {
++		t.Fatalf("rejected request must be retried on a new connection: err=%v valid=%v", err, c.IsValid())
++	}
++
++	c = &conn{}
++	if err := c.checkError(transport, false); errors.Is(err, sqldriver.ErrBadConn) || c.IsValid() {
++		t.Fatalf("transport failure of a write must not be retried but must drop the connection: err=%v valid=%v", err, c.IsValid())
++	}
++	if err := c.ResetSession(nil); !errors.Is(err, sqldriver.ErrBadConn) {
++		t.Fatalf("ResetSession on a broken connection = %v, want ErrBadConn", err)
++	}
++
++	c = &conn{}
++	if err := c.checkError(transport, true); !errors.Is(err, sqldriver.ErrBadConn) || c.IsValid() {
++		t.Fatalf("transport failure of a read must be retried: err=%v valid=%v", err, c.IsValid())
++	}
++}
+diff --git a/libsql.go b/libsql.go
+index 7ec436d..88f6a9e 100644
+--- a/libsql.go
++++ b/libsql.go
+@@ -28,6 +28,7 @@ import (
+ 	"net/url"
+ 	"regexp"
+ 	"strings"
++	"sync/atomic"
+ 	"time"
+ 	"unsafe"
+ 
+@@ -435,6 +436,7 @@ func libsqlConnect(db C.libsql_database_t) (C.libsql_connection_t, error) {
+ 
+ type conn struct {
+ 	nativePtr C.libsql_connection_t
++	broken    atomic.Bool
+ }
+ 
+ func (c *conn) Prepare(query string) (sqldriver.Stmt, error) {
+@@ -660,7 +662,7 @@ func (r execResult) RowsAffected() (int64, error) {
+ func (c *conn) ExecContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Result, error) {
+ 	rows, err := c.execute(query, args, true)
+ 	if err != nil {
+-		return nil, err
++		return nil, c.checkError(err, false)
+ 	}
+ 	id := int64(C.libsql_last_insert_rowid(c.nativePtr))
+ 	changes := int64(C.libsql_changes(c.nativePtr))
+@@ -733,9 +735,9 @@ const (
+ 	TYPE_NULL
+ )
+ 
+-func newRows(nativePtr C.libsql_rows_t) (*rows, error) {
++func newRows(c *conn, nativePtr C.libsql_rows_t) (*rows, error) {
+ 	if nativePtr == nil {
+-		return &rows{nil, nil}, nil
++		return &rows{conn: c}, nil
+ 	}
+ 	columnCount := int(C.libsql_column_count(nativePtr))
+ 	columns := make([]string, columnCount)
+@@ -749,10 +751,11 @@ func newRows(nativePtr C.libsql_rows_t) (*rows, error) {
+ 		columns[i] = C.GoString(ptr)
+ 		C.libsql_free_string(ptr)
+ 	}
+-	return &rows{nativePtr, columns}, nil
++	return &rows{conn: c, nativePtr: nativePtr, columnNames: columns}, nil
+ }
+ 
+ type rows struct {
++	conn        *conn
+ 	nativePtr   C.libsql_rows_t
+ 	columnNames []string
+ }
+@@ -777,7 +780,7 @@ func (r *rows) Next(dest []sqldriver.Value) error {
+ 	var errMsg *C.char
+ 	statusCode := C.libsql_next_row(r.nativePtr, &row, &errMsg)
+ 	if statusCode != 0 {
+-		return libsqlError("failed to get next row", statusCode, errMsg)
++		return r.conn.checkError(libsqlError("failed to get next row", statusCode, errMsg), false)
+ 	}
+ 	if row == nil {
+ 		r.Close()
+@@ -861,7 +864,7 @@ Outerloop:
+ func (c *conn) QueryContext(ctx context.Context, query string, args []sqldriver.NamedValue) (sqldriver.Rows, error) {
+ 	rowsNativePtr, err := c.execute(query, args, false)
+ 	if err != nil {
+-		return nil, err
++		return nil, c.checkError(err, isReadOnlyQuery(query))
+ 	}
+-	return newRows(rowsNativePtr)
++	return newRows(c, rowsNativePtr)
+ }

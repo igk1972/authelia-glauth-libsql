@@ -3,7 +3,7 @@ set -euo pipefail
 
 #MISE description="Build glauth with the compiled-in libsql backend (embedlibsql, CGO)"
 #MISE depends=["setup:sources"]
-#MISE sources=[".build/glauth/v2/**/*.go", "patches/glauth/*.patch"]
+#MISE sources=[".build/glauth/v2/**/*.go", ".build/go-libsql/*.go", "patches/glauth/*.patch", "patches/go-libsql/*.patch"]
 #MISE outputs=[".build/bin/glauth"]
 
 ROOT="${MISE_PROJECT_ROOT:-$PWD}"

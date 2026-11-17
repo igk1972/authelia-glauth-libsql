@@ -3,7 +3,7 @@ set -euo pipefail
 
 #MISE description="Build patched Authelia with the libsql storage and session backends (CGO)"
 #MISE depends=["setup:sources", "build:frontend"]
-#MISE sources=[".build/authelia/internal/**/*.go", ".build/authelia/internal/server/public_html/**/*", "patches/authelia/*.patch"]
+#MISE sources=[".build/authelia/internal/**/*.go", ".build/authelia/internal/server/public_html/**/*", "patches/authelia/*.patch", ".build/go-libsql/*.go", "patches/go-libsql/*.patch"]
 #MISE outputs=[".build/bin/authelia"]
 
 ROOT="${MISE_PROJECT_ROOT:-$PWD}"

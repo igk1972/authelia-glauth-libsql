@@ -66,6 +66,39 @@ clone authelia https://github.com/authelia/authelia.git "$AUTHELIA_TAG"
 # without an SSH key fail cloning git@github.com:glauth/*.
 clone glauth https://github.com/glauth/glauth.git "$GLAUTH_TAG"
 
+# go-libsql ships prebuilt static libsql archives, so it is copied from the module cache at
+# the version both patched modules require instead of being cloned, then patched in place.
+setup_go_libsql() {
+	local mod=github.com/tursodatabase/go-libsql
+	local dir="$BUILD/go-libsql"
+	local va vg src
+	va=$(go -C "$BUILD/authelia" list -m -f '{{.Version}}' "$mod")
+	vg=$(go -C "$BUILD/glauth/v2" list -m -f '{{.Version}}' "$mod")
+	if [ "$va" != "$vg" ]; then
+		echo "go-libsql version mismatch: authelia $va, glauth $vg"
+		return 1
+	fi
+	if [ "${usage_reset:-false}" = "true" ] && [ -d "$dir" ]; then
+		echo "removing $dir"
+		rm -rf "$dir"
+	fi
+	if [ ! -d "$dir/.git" ]; then
+		src=$(go mod download -json "$mod@$va" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')
+		echo "copying go-libsql @ $va"
+		mkdir -p "$dir"
+		cp -R "$src/." "$dir/"
+		chmod -R u+w "$dir"
+		# apply_patches runs git apply inside the directory.
+		git -C "$dir" init -q
+	else
+		echo "go-libsql present"
+	fi
+	apply_patches go-libsql
+	go -C "$BUILD/authelia" mod edit -replace "$mod=../go-libsql"
+	go -C "$BUILD/glauth/v2" mod edit -replace "$mod=../../go-libsql"
+}
+
 apply_patches authelia
 regen_authelia_keys
 apply_patches glauth
+setup_go_libsql
